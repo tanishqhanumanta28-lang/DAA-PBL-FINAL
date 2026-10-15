@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudPlace 3D — Optimal Replica Placement, Visualised</title>
+  <meta name="description" content="Design a server network and find the best replica placement with interactive 3D visualisation, exact and heuristic algorithms, and full mathematical proof.">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/sections.css">
+
+  <!-- CDN: Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js" type="module"></script>
+
+  <!-- CDN: GSAP + ScrollTrigger + Lenis -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js" defer></script>
+</head>
+<body>
+  <!-- site.js injects: header, menu overlay, footer, cursor, loader, page-wipe -->
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SECTION 1: HERO
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="section section-cream contour-bg hero" id="hero">
+    <div class="hero-3d-wrap" id="hero-3d-wrap">
+      <!-- Three.js canvas injected here by script -->
+    </div>
+
+    <div class="hero-inner container">
+      <div class="hero-headline">
+        <div class="text-reveal-line">
+          <span class="reveal-text display">FIND THE</span>
+        </div>
+        <div class="text-reveal-line">
+          <span class="reveal-text display two-tone">
+            BEST <span class="serif-accent">PLACE.</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-bottom">
+      <div class="hero-next-run" data-animate="fade-up">
+        <div class="micro-label">NEXT RUN</div>
+        <div class="preset-name" id="hero-preset-name">3 Regions</div>
+        <div class="preset-stats" id="hero-preset-stats">6 nodes · 7 edges · L ≈ 42 ms</div>
+      </div>
+      <div class="hero-scroll-hint" data-animate="fade-up">
+        <span class="scroll-text">Scroll</span>
+        <div class="scroll-arrow"></div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SECTION 2: MARQUEE STATEMENT
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="section section-dark grain marquee-statement" id="marquee-statement">
+    <!-- SVG scribble behind the marquee -->
+    <svg class="marquee-scribble svg-scribble" viewBox="0 0 1200 60" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" preserveAspectRatio="none">
+      <path d="M0 40 Q150 5 300 35 T600 25 T900 40 T1200 20" style="--scribble-length:1800; stroke-width: 2.5;"/>
+    </svg>
+
+    <div style="overflow: hidden;">
+      <div class="marquee-track" style="--marquee-dur: 22s;">
+        <span class="marquee-item cream">WE CUT LATENCY.</span>
+        <span class="marquee-item lime">WE BALANCE LOAD.</span>
+        <span class="marquee-item cream">WE PROVE THE MATH.</span>
+        <span class="marquee-item lime">WE CUT LATENCY.</span>
+        <span class="marquee-item cream">WE BALANCE LOAD.</span>
+        <span class="marquee-item lime">WE PROVE THE MATH.</span>
+      </div>
+    </div>
+
+    <!-- Centre panel with packet animation -->
+    <div class="marquee-center-panel" data-animate="scale-in">
+      <canvas id="packet-canvas" width="380" height="260"></canvas>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SECTION 3: BIG STATEMENT
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="section section-dark grain big-statement" id="big-statement">
+    <div class="container">
+      <p class="big-statement-text" id="big-statement-text">
+        <span class="big-statement-word" data-index="0" data-total="16">MINIMISING </span>
+        <span class="big-statement-word lime" data-index="1" data-total="16">LATENCY, </span>
+        <span class="big-statement-word" data-index="2" data-total="16">BALANCING </span>
+        <span class="big-statement-word lime" data-index="3" data-total="16">LOAD, </span>
+        <span class="big-statement-word" data-index="4" data-total="16">SURVIVING </span>
+        <span class="big-statement-word lime" data-index="5" data-total="16">FAILURE. </span>
+        <br>
+        <span class="big-statement-word" data-index="6" data-total="16">DEFINING </span>
+        <span class="big-statement-word" data-index="7" data-total="16">THE </span>
+        <span class="big-statement-word lime" data-index="8" data-total="16">OPTIMAL </span>
+        <span class="big-statement-word" data-index="9" data-total="16">PLACEMENT </span>
+        <span class="big-statement-word" data-index="10" data-total="16">ON </span>
+        <span class="big-statement-word" data-index="11" data-total="16">AND </span>
+        <span class="big-statement-word" data-index="12" data-total="16">OFF </span>
+        <span class="big-statement-word" data-index="13" data-total="16">THE </span>
+        <span class="big-statement-word lime" data-index="14" data-total="16">GRAPH.</span>
+      </p>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SECTION 4: HORIZONTAL SCROLL — "THE METHOD"
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="section section-dark grain method-section" id="method-section" data-hscroll>
+    <div class="section-header">
+      <div class="text-reveal-line">
+        <span class="reveal-text micro-label lime" style="font-size: var(--fs-small);">THE METHOD</span>
+      </div>
+    </div>
+
+    <div class="hscroll-track" id="method-track">
+
+      <!-- Panel 1: Model -->
+      <div class="method-panel" data-animate="fade-up">
+        <div class="panel-number">STEP 01</div>
+        <div class="panel-title">MODEL</div>
+        <div class="panel-canvas" id="method-canvas-1">
+          <canvas width="460" height="345"></canvas>
+        </div>
+        <p class="panel-quote">"Define your network as a weighted graph — nodes are data centres, edges are links, weights are latencies."</p>
+        <div class="panel-underline"></div>
+      </div>
+
+      <!-- Panel 2: MST Backbone -->
+      <div class="method-panel" data-animate="fade-up" data-delay="0.1">
+        <div class="panel-number">STEP 02, KRUSKAL</div>
+        <div class="panel-title">MST BACKBONE</div>
+        <div class="panel-canvas" id="method-canvas-2">
+          <canvas width="460" height="345"></canvas>
+        </div>
+        <p class="panel-quote">"Extract the minimum spanning tree — the cheapest backbone connecting all nodes."</p>
+        <div class="panel-underline"></div>
+      </div>
+
+      <!-- Panel 3: Shortest Paths -->
+      <div class="method-panel" data-animate="fade-up" data-delay="0.2">
+        <div class="panel-number">STEP 03, DIJKSTRA</div>
+        <div class="panel-title">SHORTEST PATHS</div>
+        <div class="panel-canvas" id="method-canvas-3">
+          <canvas width="460" height="345"></canvas>
+        </div>
+        <p class="panel-quote">"Compute all-pairs shortest paths — every node knows its quickest route to every other."</p>
+        <div class="panel-underline"></div>
+      </div>
+
+      <!-- Panel 4: Placement -->
+      <div class="method-panel" data-animate="fade-up" data-delay="0.3">
+        <div class="panel-number">STEP 04, BITMASK DP</div>
+        <div class="panel-title">PLACEMENT</div>
+        <div class="panel-canvas" id="method-canvas-4">
+          <canvas width="460" height="345"></canvas>
+        </div>
+        <p class="panel-quote">"Find the k-subset of nodes that minimises demand-weighted average latency — exactly or heuristically."</p>
+        <div class="panel-underline"></div>
+      </div>
+
+      <!-- Panel 5: Fault Tolerance -->
+      <div class="method-panel" data-animate="fade-up" data-delay="0.4">
+        <div class="panel-number">STEP 05</div>
+        <div class="panel-title">FAULT TOLERANCE</div>
+        <div class="panel-canvas" id="method-canvas-5">
+          <canvas width="460" height="345"></canvas>
+        </div>
+        <p class="panel-quote">"Remove any node or edge — watch the network reroute and measure the latency impact."</p>
+        <div class="panel-underline"></div>
+      </div>
+    </div>
+
+    <div class="method-progress" id="method-progress">
+      <div class="progress-dot is-active"></div>
+      <div class="progress-dot"></div>
+      <div class="progress-dot"></div>
+      <div class="progress-dot"></div>
+      <div class="progress-dot"></div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SECTION 5: EXACT / HEURISTIC TOGGLE
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="section section-dark grain toggle-section" id="toggle-section">
+    <div class="toggle-inner">
+      <div class="toggle-word is-active" id="toggle-exact" data-cursor="Click">EXACT</div>
+      <div class="toggle-switch" id="toggle-switch" role="switch" aria-checked="false" tabindex="0"
+           aria-label="Switch between exact and heuristic algorithms" data-cursor="Toggle"></div>
+      <div class="toggle-word" id="toggle-heuristic" data-cursor="Click">HEURISTIC</div>
+
+      <div class="toggle-details" id="toggle-details">
+        <div class="toggle-detail-card is-highlighted" id="toggle-card-1">
+          <div class="algo-name" id="algo-name-1">BITMASK DP</div>
+          <span class="algo-badge badge-exact" id="algo-badge-1">EXACT</span>
+          <div class="algo-complexity" id="algo-complex-1">O(2ⁿ · n · k) time · O(2ⁿ) space</div>
+          <div class="algo-result" id="algo-result-1">L = 42.50 ms · Sites: [1, 4]</div>
+        </div>
+        <div class="toggle-detail-card is-highlighted" id="toggle-card-2">
+          <div class="algo-name" id="algo-name-2">TREE DP</div>
+          <span class="algo-badge badge-exact" id="algo-badge-2">HEURISTIC</span>
+          <div class="algo-complexity" id="algo-complex-2">O(n² · k) time · O(n · k) space</div>
+          <div class="algo-result" id="algo-result-2">L = 43.10 ms · Sites: [1, 4]</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SECTION 6: ARCHIVE GRID
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="section section-black archive-section" id="archive-section">
+    <div class="container">
+      <div class="section-header">
+        <div>
+          <div class="text-reveal-line">
+            <span class="reveal-text section-title" style="font-size: var(--fs-h1);">SCENARIO</span>
+          </div>
+          <div class="text-reveal-line">
+            <span class="reveal-text section-title two-tone" style="font-size: var(--fs-h1);">
+              <span class="serif-accent">ARCHIVE</span>
+            </span>
+          </div>
+        </div>
+        <a href="archive.html" class="btn-pill btn-pill-sm" data-animate="fade-up">
+          VIEW ALL <span class="btn-arrow">→</span>
+        </a>
+      </div>
+
+      <div class="archive-grid" id="archive-grid">
+        <!-- Populated by script -->
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SECTION 7: FEATURE BLOCK — CALCULATION CENTER
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="section section-cream feature-block contour-bg" id="feature-block">
+    <div class="feature-inner">
+      <div class="feature-content">
+        <div class="text-reveal-line">
+          <span class="reveal-text feature-headline two-tone">EVERY NUMBER,</span>
+        </div>
+        <div class="text-reveal-line">
+          <span class="reveal-text feature-headline two-tone"><span class="serif-accent">SHOWN.</span></span>
+        </div>
+        <p class="feature-desc" data-animate="fade-up">
+          The Calculation Center shows every metric, every formula, every per-node contribution.
+          Reconciliation checks guarantee the math adds up. Compare strategies side by side.
+        </p>
+        <a href="lab.html#calc" class="btn-pill" data-animate="fade-up" data-cursor="Open">
+          OPEN CALCULATION CENTER <span class="btn-arrow">→</span>
+        </a>
+      </div>
+
+      <div class="feature-cards-float" data-animate="fade-up">
+        <div class="float-card" style="top: 10%; left: 5%; transform: rotate(-3deg);">
+          <div class="float-label">Weighted Avg Latency</div>
+          <div class="float-value" data-count-to="42.5" data-count-decimals="1" data-count-suffix=" ms">0 ms</div>
+        </div>
+        <div class="float-card" style="top: 35%; left: 45%; transform: rotate(2deg);">
+          <div class="float-label">Jain's Fairness</div>
+          <div class="float-value" data-count-to="0.984" data-count-decimals="3" data-count-suffix="">0</div>
+        </div>
+        <div class="float-card" style="top: 60%; left: 15%; transform: rotate(-1deg);">
+          <div class="float-label">Improvement vs Random</div>
+          <div class="float-value lime" data-count-to="39" data-count-suffix="%" data-count-decimals="0">0%</div>
+        </div>
+        <div class="float-card" style="top: 75%; left: 55%; transform: rotate(3deg);">
+          <div class="float-label">Reconciliation</div>
+          <div class="float-check">
+            <span class="check-icon">✓</span>
+            <span>All contributions sum to L</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SECTION 8: TECH MARQUEE — "BUILT WITH"
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="section section-dark grain tech-marquee" id="tech-marquee">
+    <div class="giant-script" aria-hidden="true">Proof</div>
+    <div class="tech-track">
+      <div class="marquee-track" style="--marquee-dur: 35s;">
+        <span class="marquee-item"><span class="tech-dot"></span>Three.js</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Dijkstra</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Floyd-Warshall</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Kruskal</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Prim</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Tree DP</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Bitmask DP</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Local Search</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Web Workers</span>
+        <!-- Duplicate for seamless loop -->
+        <span class="marquee-item"><span class="tech-dot"></span>Three.js</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Dijkstra</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Floyd-Warshall</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Kruskal</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Prim</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Tree DP</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Bitmask DP</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Local Search</span>
+        <span class="marquee-item"><span class="tech-dot"></span>Web Workers</span>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SECTION 9: FOOTER (injected by site.js)
+       ═══════════════════════════════════════════════════════════════════════ -->
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SCRIPTS
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <script type="module">
+    import './js/site.js';
+    import './js/motion.js';
+  </script>
+
+  <!-- Home page interactive scripts (non-module for Three.js global) -->
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Wait a tick for fonts/libs to load
+      setTimeout(initHomePage, 200);
+    });
+
+    function initHomePage() {
+      initHeroScene();
+      initPacketCanvas();
+      initMethodCanvases();
+      initToggle();
+      initArchiveGrid();
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // HERO: Three.js Network Sculpture
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function initHeroScene() {
+      const wrap = document.getElementById('hero-3d-wrap');
+      if (!wrap || typeof THREE === 'undefined') {
+        console.warn('[hero] Three.js not available');
+        return;
+      }
+
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 100);
+      camera.position.set(0, 0, 8);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setClearColor(0x000000, 0);
+      wrap.appendChild(renderer.domElement);
+
+      // Nodes (14 glowing spheres)
+      const nodeCount = 14;
+      const nodes = [];
+      const nodeGeo = new THREE.SphereGeometry(0.12, 16, 16);
+      const limeMat = new THREE.MeshBasicMaterial({ color: 0xd8ff3e });
+      const dimMat = new THREE.MeshBasicMaterial({ color: 0xe9e8dc, transparent: true, opacity: 0.4 });
+
+      // Pseudo-random positions in a sphere
+      let seed = 42;
+      function rand() { seed = (seed * 16807 + 11) % 2147483647; return (seed / 2147483647) - 0.5; }
+
+      for (let i = 0; i < nodeCount; i++) {
+        const mesh = new THREE.Mesh(nodeGeo, i < 3 ? limeMat.clone() : dimMat.clone());
+        const r = 2.2 + rand() * 1.2;
+        const theta = Math.acos(2 * (rand() + 0.5) - 1);
+        const phi = (rand() + 0.5) * Math.PI * 2;
+        mesh.position.set(
+          r * Math.sin(theta) * Math.cos(phi),
+          r * Math.sin(theta) * Math.sin(phi),
+          r * Math.cos(theta)
+        );
+        scene.add(mesh);
+        nodes.push(mesh);
+      }
+
+      // Glow effect for accent nodes
+      const glowGeo = new THREE.SphereGeometry(0.25, 16, 16);
+      const glowMat = new THREE.MeshBasicMaterial({ color: 0xd8ff3e, transparent: true, opacity: 0.12 });
+      for (let i = 0; i < 3; i++) {
+        const glow = new THREE.Mesh(glowGeo, glowMat.clone());
+        glow.position.copy(nodes[i].position);
+        scene.add(glow);
+      }
+
+      // Edges (curved lines connecting nearby nodes)
+      const edgeMat = new THREE.LineBasicMaterial({ color: 0xe9e8dc, transparent: true, opacity: 0.15 });
+      const limeEdgeMat = new THREE.LineBasicMaterial({ color: 0xd8ff3e, transparent: true, opacity: 0.35 });
+
+      for (let i = 0; i < nodeCount; i++) {
+        // Connect to 2 nearest
+        const dists = nodes.map((n, j) => ({ j, d: nodes[i].position.distanceTo(n.position) }))
+          .filter(e => e.j !== i)
+          .sort((a, b) => a.d - b.d);
+
+        for (let k = 0; k < Math.min(2, dists.length); k++) {
+          const j = dists[k].j;
+          if (j < i) continue; // avoid duplicates
+
+          const p1 = nodes[i].position;
+          const p2 = nodes[j].position;
+          const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+          mid.add(new THREE.Vector3(rand() * 0.5, rand() * 0.5, rand() * 0.5));
+
+          const curve = new THREE.QuadraticBezierCurve3(p1, mid, p2);
+          const points = curve.getPoints(20);
+          const geometry = new THREE.BufferGeometry().setFromPoints(points);
+          const isLime = i < 3 && j < 3;
+          const line = new THREE.Line(geometry, isLime ? limeEdgeMat.clone() : edgeMat.clone());
+          scene.add(line);
+        }
+      }
+
+      // Ambient rotation group
+      const group = new THREE.Group();
+      scene.children.forEach(child => group.add(child));
+      scene.add(group);
+
+      // Wait — actually we can't move children like that after adding them.
+      // Let's just rotate the entire scene from the camera perspective instead.
+
+      // Remove group approach, just track time
+      let time = 0;
+
+      function animate() {
+        requestAnimationFrame(animate);
+        time += 0.003;
+
+        // Slow orbit
+        camera.position.x = 8 * Math.sin(time * 0.3);
+        camera.position.z = 8 * Math.cos(time * 0.3);
+        camera.position.y = 1.5 * Math.sin(time * 0.15);
+        camera.lookAt(0, 0, 0);
+
+        // Subtle node pulse
+        nodes.forEach((n, i) => {
+          const scale = 1 + 0.08 * Math.sin(time * 2 + i * 0.5);
+          n.scale.setScalar(scale);
+        });
+
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // Resize
+      window.addEventListener('resize', () => {
+        const nw = wrap.clientWidth, nh = wrap.clientHeight;
+        camera.aspect = nw / nh;
+        camera.updateProjectionMatrix();
+        renderer.setSize(nw, nh);
+      });
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // MARQUEE: Packet Animation Canvas
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function initPacketCanvas() {
+      const canvas = document.getElementById('packet-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+
+      // Simple network with packet flowing along shortest path
+      const netNodes = [
+        { x: 40, y: 130 }, { x: 130, y: 50 }, { x: 130, y: 210 },
+        { x: 220, y: 90 }, { x: 220, y: 170 }, { x: 340, y: 130 }
+      ];
+      const netEdges = [
+        [0,1], [0,2], [1,3], [2,4], [3,5], [4,5], [1,4], [3,4]
+      ];
+      const path = [0, 1, 3, 5]; // Highlighted shortest path
+      let packetT = 0;
+
+      function drawNetwork() {
+        ctx.clearRect(0, 0, W, H);
+
+        // Draw edges
+        ctx.strokeStyle = 'rgba(233,232,220,0.15)';
+        ctx.lineWidth = 1;
+        for (const [a, b] of netEdges) {
+          ctx.beginPath();
+          ctx.moveTo(netNodes[a].x, netNodes[a].y);
+          ctx.lineTo(netNodes[b].x, netNodes[b].y);
+          ctx.stroke();
+        }
+
+        // Draw path edges (highlighted)
+        ctx.strokeStyle = 'rgba(216,255,62,0.5)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < path.length - 1; i++) {
+          const a = path[i], b = path[i + 1];
+          ctx.beginPath();
+          ctx.moveTo(netNodes[a].x, netNodes[a].y);
+          ctx.lineTo(netNodes[b].x, netNodes[b].y);
+          ctx.stroke();
+        }
+
+        // Draw nodes
+        for (let i = 0; i < netNodes.length; i++) {
+          const isOnPath = path.includes(i);
+          ctx.beginPath();
+          ctx.arc(netNodes[i].x, netNodes[i].y, isOnPath ? 6 : 4, 0, Math.PI * 2);
+          ctx.fillStyle = isOnPath ? '#d8ff3e' : 'rgba(233,232,220,0.4)';
+          ctx.fill();
+
+          if (isOnPath) {
+            ctx.beginPath();
+            ctx.arc(netNodes[i].x, netNodes[i].y, 10, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(216,255,62,0.1)';
+            ctx.fill();
+          }
+        }
+
+        // Draw packet
+        packetT = (packetT + 0.008) % 1;
+        const totalSegments = path.length - 1;
+        const segT = packetT * totalSegments;
+        const seg = Math.min(Math.floor(segT), totalSegments - 1);
+        const localT = segT - seg;
+        const from = netNodes[path[seg]];
+        const to = netNodes[path[seg + 1]];
+        const px = from.x + (to.x - from.x) * localT;
+        const py = from.y + (to.y - from.y) * localT;
+
+        // Packet glow
+        ctx.beginPath();
+        ctx.arc(px, py, 12, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(216,255,62,0.2)';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(px, py, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#d8ff3e';
+        ctx.fill();
+
+        // Trail
+        for (let t = 0; t < 5; t++) {
+          const trailT = ((packetT - t * 0.015) + 1) % 1;
+          const tSeg = trailT * totalSegments;
+          const tSegIdx = Math.min(Math.floor(tSeg), totalSegments - 1);
+          const tLocal = tSeg - tSegIdx;
+          const tFrom = netNodes[path[tSegIdx]];
+          const tTo = netNodes[path[tSegIdx + 1]];
+          const tx = tFrom.x + (tTo.x - tFrom.x) * tLocal;
+          const ty = tFrom.y + (tTo.y - tFrom.y) * tLocal;
+
+          ctx.beginPath();
+          ctx.arc(tx, ty, 2, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(216,255,62,${0.4 - t * 0.07})`;
+          ctx.fill();
+        }
+
+        requestAnimationFrame(drawNetwork);
+      }
+      drawNetwork();
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // METHOD: Mini diagram canvases
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function initMethodCanvases() {
+      const configs = [
+        { id: 'method-canvas-1', type: 'graph' },
+        { id: 'method-canvas-2', type: 'mst' },
+        { id: 'method-canvas-3', type: 'paths' },
+        { id: 'method-canvas-4', type: 'placement' },
+        { id: 'method-canvas-5', type: 'fault' },
+      ];
+
+      // Demo network
+      const netNodes = [
+        {x: 70, y: 60}, {x: 200, y: 40}, {x: 350, y: 70},
+        {x: 120, y: 180}, {x: 260, y: 200}, {x: 400, y: 160},
+        {x: 180, y: 290}, {x: 330, y: 280}
+      ];
+      const edges = [[0,1],[1,2],[0,3],[1,4],[2,5],[3,4],[4,5],[3,6],[4,7],[6,7],[5,7]];
+      const mstEdges = [[0,1],[1,2],[0,3],[3,4],[4,5],[3,6],[6,7]];
+      const pathHighlight = [0, 1, 4, 7];
+      const replicaSites = [1, 5];
+      const failEdge = [4, 5];
+
+      configs.forEach(({ id, type }) => {
+        const wrap = document.getElementById(id);
+        if (!wrap) return;
+        const canvas = wrap.querySelector('canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width, H = canvas.height;
+
+        function draw() {
+          ctx.clearRect(0, 0, W, H);
+
+          // Draw all edges (dimmed)
+          edges.forEach(([a, b]) => {
+            const isMST = type !== 'graph' && mstEdges.some(e => (e[0]===a&&e[1]===b)||(e[0]===b&&e[1]===a));
+            const isPath = type === 'paths' && pathHighlight.includes(a) && pathHighlight.includes(b) &&
+              (pathHighlight.indexOf(b) === pathHighlight.indexOf(a) + 1 || pathHighlight.indexOf(a) === pathHighlight.indexOf(b) + 1);
+            const isFail = type === 'fault' && ((a===failEdge[0]&&b===failEdge[1])||(a===failEdge[1]&&b===failEdge[0]));
+
+            ctx.beginPath();
+            ctx.moveTo(netNodes[a].x, netNodes[a].y);
+            ctx.lineTo(netNodes[b].x, netNodes[b].y);
+
+            if (isFail) {
+              ctx.strokeStyle = 'rgba(255,93,93,0.6)';
+              ctx.lineWidth = 2;
+              ctx.setLineDash([4, 4]);
+            } else if (isPath) {
+              ctx.strokeStyle = 'rgba(216,255,62,0.6)';
+              ctx.lineWidth = 2;
+              ctx.setLineDash([]);
+            } else if (isMST && type === 'mst') {
+              ctx.strokeStyle = 'rgba(216,255,62,0.4)';
+              ctx.lineWidth = 2;
+              ctx.setLineDash([]);
+            } else {
+              ctx.strokeStyle = 'rgba(233,232,220,0.12)';
+              ctx.lineWidth = 1;
+              ctx.setLineDash([]);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+          });
+
+          // Draw nodes
+          netNodes.forEach((n, i) => {
+            const isReplica = type === 'placement' && replicaSites.includes(i);
+            const isOnPath = type === 'paths' && pathHighlight.includes(i);
+            const isFaultNode = type === 'fault' && (i === failEdge[0] || i === failEdge[1]);
+
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, isReplica ? 8 : (isOnPath ? 6 : 5), 0, Math.PI * 2);
+
+            if (isReplica) {
+              ctx.fillStyle = '#d8ff3e';
+            } else if (isFaultNode) {
+              ctx.fillStyle = 'rgba(255,93,93,0.6)';
+            } else if (isOnPath) {
+              ctx.fillStyle = 'rgba(216,255,62,0.5)';
+            } else {
+              ctx.fillStyle = 'rgba(233,232,220,0.25)';
+            }
+            ctx.fill();
+
+            if (isReplica) {
+              ctx.beginPath();
+              ctx.arc(n.x, n.y, 14, 0, Math.PI * 2);
+              ctx.fillStyle = 'rgba(216,255,62,0.08)';
+              ctx.fill();
+            }
+          });
+
+          // Type-specific overlays
+          if (type === 'placement') {
+            // Draw assignment arrows
+            netNodes.forEach((n, i) => {
+              if (replicaSites.includes(i)) return;
+              const nearest = replicaSites.reduce((best, s) => {
+                const d = Math.hypot(netNodes[s].x - n.x, netNodes[s].y - n.y);
+                return d < best.d ? {s, d} : best;
+              }, {s: -1, d: Infinity});
+
+              ctx.beginPath();
+              ctx.setLineDash([2, 3]);
+              ctx.moveTo(n.x, n.y);
+              ctx.lineTo(netNodes[nearest.s].x, netNodes[nearest.s].y);
+              ctx.strokeStyle = 'rgba(216,255,62,0.15)';
+              ctx.lineWidth = 1;
+              ctx.stroke();
+              ctx.setLineDash([]);
+            });
+          }
+
+          if (type === 'fault') {
+            // X mark on failed edge
+            const mid = {
+              x: (netNodes[failEdge[0]].x + netNodes[failEdge[1]].x) / 2,
+              y: (netNodes[failEdge[0]].y + netNodes[failEdge[1]].y) / 2
+            };
+            ctx.strokeStyle = '#ff5d5d';
+            ctx.lineWidth = 2;
+            const s = 8;
+            ctx.beginPath(); ctx.moveTo(mid.x-s, mid.y-s); ctx.lineTo(mid.x+s, mid.y+s); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(mid.x+s, mid.y-s); ctx.lineTo(mid.x-s, mid.y+s); ctx.stroke();
+          }
+        }
+
+        draw();
+      });
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // TOGGLE: Exact / Heuristic
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function initToggle() {
+      const exactWord = document.getElementById('toggle-exact');
+      const heuristicWord = document.getElementById('toggle-heuristic');
+      const sw = document.getElementById('toggle-switch');
+      if (!exactWord || !heuristicWord || !sw) return;
+
+      const card1 = document.getElementById('toggle-card-1');
+      const card2 = document.getElementById('toggle-card-2');
+      const name1 = document.getElementById('algo-name-1');
+      const name2 = document.getElementById('algo-name-2');
+      const badge1 = document.getElementById('algo-badge-1');
+      const badge2 = document.getElementById('algo-badge-2');
+      const complex1 = document.getElementById('algo-complex-1');
+      const complex2 = document.getElementById('algo-complex-2');
+      const result1 = document.getElementById('algo-result-1');
+      const result2 = document.getElementById('algo-result-2');
+
+      const modes = {
+        exact: {
+          card1: { name: 'BITMASK DP', badge: 'EXACT', badgeClass: 'badge-exact', complexity: 'O(2ⁿ · n · k) time · O(2ⁿ) space', result: 'L = 42.50 ms · Sites: [1, 4]' },
+          card2: { name: 'TREE DP', badge: 'HEURISTIC', badgeClass: 'badge-heuristic', complexity: 'O(n² · k) time · O(n · k) space', result: 'L = 43.10 ms · Sites: [1, 4]' },
+        },
+        heuristic: {
+          card1: { name: 'GREEDY', badge: 'HEURISTIC', badgeClass: 'badge-heuristic', complexity: 'O(k · n²) time · O(n) space', result: 'L = 44.20 ms · Sites: [1, 3]' },
+          card2: { name: 'LOCAL SEARCH', badge: 'HEURISTIC', badgeClass: 'badge-heuristic', complexity: 'O(iter · k · n) time · O(n) space', result: 'L = 43.80 ms · Sites: [1, 4]' },
+        }
+      };
+
+      let isHeuristic = false;
+
+      function updateCards() {
+        const mode = isHeuristic ? modes.heuristic : modes.exact;
+        name1.textContent = mode.card1.name;
+        name2.textContent = mode.card2.name;
+        badge1.textContent = mode.card1.badge;
+        badge2.textContent = mode.card2.badge;
+        badge1.className = 'algo-badge ' + mode.card1.badgeClass;
+        badge2.className = 'algo-badge ' + mode.card2.badgeClass;
+        complex1.textContent = mode.card1.complexity;
+        complex2.textContent = mode.card2.complexity;
+        result1.textContent = mode.card1.result;
+        result2.textContent = mode.card2.result;
+
+        exactWord.classList.toggle('is-active', !isHeuristic);
+        heuristicWord.classList.toggle('is-active', isHeuristic);
+        sw.classList.toggle('is-right', isHeuristic);
+        sw.setAttribute('aria-checked', isHeuristic);
+      }
+
+      function toggle() {
+        isHeuristic = !isHeuristic;
+        updateCards();
+      }
+
+      sw.addEventListener('click', toggle);
+      sw.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }});
+      exactWord.addEventListener('click', () => { if (isHeuristic) toggle(); });
+      heuristicWord.addEventListener('click', () => { if (!isHeuristic) toggle(); });
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ARCHIVE: Preset Grid
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function initArchiveGrid() {
+      const grid = document.getElementById('archive-grid');
+      if (!grid) return;
+
+      const presets = [
+        { id: 'PRE-001', name: '3 Regions', nodes: 6, edges: 7, featured: true },
+        { id: 'PRE-002', name: 'Ring Topology', nodes: 8, edges: 8, featured: false },
+        { id: 'PRE-003', name: 'Star Hub', nodes: 7, edges: 6, featured: false },
+        { id: 'PRE-004', name: 'Dense Mesh', nodes: 9, edges: 15, featured: false },
+        { id: 'PRE-005', name: 'Failure Test', nodes: 6, edges: 5, featured: false },
+        { id: 'PRE-006', name: 'Global CDN', nodes: 12, edges: 20, featured: false },
+      ];
+
+      presets.forEach((preset, idx) => {
+        const tile = document.createElement('div');
+        tile.className = `archive-tile${preset.featured ? ' featured' : ''}`;
+        tile.setAttribute('data-animate', 'fade-up');
+        tile.setAttribute('data-delay', (idx * 0.08).toString());
+        tile.setAttribute('data-cursor', 'Open');
+
+        // Generate mini SVG graph
+        const svg = generateMiniGraph(preset.nodes, idx);
+
+        tile.innerHTML = `
+          <span class="tile-label">${preset.id}</span>
+          <h4 style="font-size: var(--fs-small); margin-top: var(--space-1);">${preset.name}</h4>
+          <p style="font-size: var(--fs-micro); color: var(--text-muted-dark); margin-top: 2px;">
+            ${preset.nodes} nodes · ${preset.edges} edges
+          </p>
+          <div class="tile-graph"></div>
+        `;
+        tile.querySelector('.tile-graph').appendChild(svg);
+        tile.addEventListener('click', () => { window.location.href = `lab.html?preset=${preset.id}`; });
+        grid.appendChild(tile);
+      });
+    }
+
+    function generateMiniGraph(nodeCount, seed) {
+      const w = 240, h = 150;
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      svg.setAttribute('width', '100%');
+      svg.setAttribute('height', '100%');
+
+      let s = (seed + 1) * 13;
+      const rand = () => { s = (s * 16807 + 11) % 2147483647; return s / 2147483647; };
+
+      const nodes = [];
+      for (let i = 0; i < nodeCount; i++) {
+        nodes.push({ x: 20 + rand() * (w - 40), y: 15 + rand() * (h - 30) });
+      }
+
+      // Connect nearest
+      for (let i = 0; i < nodeCount; i++) {
+        const nearest = nodes.map((n, j) => ({ j, d: Math.hypot(n.x - nodes[i].x, n.y - nodes[i].y) }))
+          .filter(e => e.j !== i)
+          .sort((a, b) => a.d - b.d);
+        const count = 1 + Math.floor(rand() * 2);
+        for (let k = 0; k < Math.min(count, nearest.length); k++) {
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', nodes[i].x);
+          line.setAttribute('y1', nodes[i].y);
+          line.setAttribute('x2', nodes[nearest[k].j].x);
+          line.setAttribute('y2', nodes[nearest[k].j].y);
+          line.setAttribute('stroke', '#d8ff3e');
+          line.setAttribute('stroke-width', '0.8');
+          line.setAttribute('opacity', '0.3');
+          svg.appendChild(line);
+        }
+      }
+
+      for (const n of nodes) {
+        const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c.setAttribute('cx', n.x);
+        c.setAttribute('cy', n.y);
+        c.setAttribute('r', 3);
+        c.setAttribute('fill', '#d8ff3e');
+        c.setAttribute('opacity', '0.5');
+        svg.appendChild(c);
+      }
+
+      return svg;
+    }
+  </script>
+</body>
+</html>

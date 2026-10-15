@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudPlace 3D — The Lab</title>
+  <meta name="description" content="Interactive workspace: design networks, run placement algorithms, visualise results.">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/lab.css">
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js" defer></script>
+</head>
+<body data-theme="dark">
+
+  <!-- site.js injects header, menu, footer, cursor -->
+
+  <div class="lab-shell" id="lab-shell">
+
+    <!-- ── Toolbar ──────────────────────────────────────────────────────── -->
+    <div class="lab-toolbar" id="lab-toolbar">
+      <div class="tool-group">
+        <label>Preset</label>
+        <select id="preset-select">
+          <option value="3regions">3 Regions (6n, 7e)</option>
+          <option value="ring">Ring (8n, 8e)</option>
+          <option value="star">Star Hub (7n, 6e)</option>
+          <option value="mesh">Dense Mesh (9n, 15e)</option>
+          <option value="failure">Failure Test (6n, 5e)</option>
+          <option value="cdn">Global CDN (12n, 20e)</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+
+      <div class="tool-sep"></div>
+
+      <div class="tool-group">
+        <label>Mode</label>
+        <button class="tool-btn is-active" id="mode-select" data-mode="select">Select</button>
+        <button class="tool-btn" id="mode-add-node" data-mode="addNode">+ Node</button>
+        <button class="tool-btn" id="mode-add-edge" data-mode="addEdge">+ Edge</button>
+        <button class="tool-btn" id="mode-delete" data-mode="delete">Delete</button>
+      </div>
+
+      <div class="tool-sep"></div>
+
+      <div class="tool-group">
+        <label>Replicas (k)</label>
+        <input type="number" id="k-input" value="2" min="1" max="20">
+      </div>
+
+      <div class="tool-sep"></div>
+
+      <div class="tool-group">
+        <button class="tool-btn tool-btn-primary" id="run-all-btn">▶ RUN ALL</button>
+        <button class="tool-btn" id="run-exact-btn">Exact</button>
+        <button class="tool-btn" id="run-heuristic-btn">Heuristic</button>
+      </div>
+
+      <div class="tool-sep"></div>
+
+      <div class="tool-group">
+        <button class="tool-btn tool-btn-danger" id="clear-btn">Clear</button>
+      </div>
+    </div>
+
+    <!-- ── Canvas ───────────────────────────────────────────────────────── -->
+    <div class="lab-canvas-area" id="lab-canvas-area">
+      <canvas id="graph-canvas"></canvas>
+      <div class="canvas-mode-badge" id="canvas-mode-badge">SELECT</div>
+      <div class="canvas-info" id="canvas-info">Click to add nodes · Drag to move · Scroll to zoom</div>
+    </div>
+
+    <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
+    <div class="lab-sidebar" id="lab-sidebar">
+
+      <!-- Graph Info -->
+      <div class="sidebar-section">
+        <div class="sidebar-title">Graph</div>
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-label">Nodes</div>
+            <div class="metric-value neutral" id="stat-nodes">0</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Edges</div>
+            <div class="metric-value neutral" id="stat-edges">0</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Connected</div>
+            <div class="metric-value neutral" id="stat-connected">—</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Replicas (k)</div>
+            <div class="metric-value" id="stat-k">2</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div class="sidebar-section" id="results-section">
+        <div class="sidebar-title">Results</div>
+        <div id="results-container">
+          <div class="empty-state">
+            <div class="empty-icon">⬡</div>
+            <p>Load a preset or build a graph, then hit <strong>▶ RUN ALL</strong></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Metrics -->
+      <div class="sidebar-section" id="metrics-section" style="display:none;">
+        <div class="sidebar-title">Best Placement Metrics</div>
+        <div class="metric-grid" id="metrics-grid">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Nodes -->
+      <div class="sidebar-section">
+        <div class="sidebar-title">Nodes</div>
+        <div class="node-list" id="node-list">
+          <div class="empty-state"><p>No nodes yet</p></div>
+        </div>
+      </div>
+
+      <!-- Edges -->
+      <div class="sidebar-section">
+        <div class="sidebar-title">Edges</div>
+        <div class="edge-list" id="edge-list">
+          <div class="empty-state"><p>No edges yet</p></div>
+        </div>
+      </div>
+
+      <!-- Step Log -->
+      <div class="sidebar-section">
+        <div class="sidebar-title">Algorithm Steps</div>
+        <div class="step-log" id="step-log">
+          <div class="empty-state"><p>Run an algorithm to see steps</p></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ Scripts ═══ -->
+  <script type="module">
+    import './js/site.js';
+  </script>
+
+  <script type="module">
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAB APP — Full working graph editor + algorithm runner
+    // ═══════════════════════════════════════════════════════════════════════
+
+    import {
+      buildAdj, checkConnectivity, validateGraph,
+      kruskal, prim, dijkstra, floydWarshall,
+      computeObjective, treeDPPlacement, bitmaskDPPlacement,
+      greedyPlacement, localSearchPlacement, randomBaseline,
+      capacityAwareAssignment, faultTolerance, generateRandomGraph
+    } from './js/algorithms.js';
+
+    import {
+      computeLatencyMetrics, jainFairness, computeRedundancy,
+      compareStrategies, runFullAnalysis
+    } from './js/calc.js';
+
+    // ── State ──────────────────────────────────────────────────────────
+
+    const state = {
+      nodes: [],      // { id, x, y, name, demand, capacity }
+      edges: [],      // { u, v, w }
+      mode: 'select', // select | addNode | addEdge | delete
+      selected: null,  // node index or null
+      edgeStart: null, // node index for edge creation
+      dragging: null,  // node index being dragged
+      results: [],     // algorithm results
+      bestResult: null,
+      pan: { x: 0, y: 0 },
+      zoom: 1,
+      nextId: 0,
+      mouseDown: false,
+      lastMouse: { x: 0, y: 0 },
+    };
+
+    // ── DOM refs ───────────────────────────────────────────────────────
+
+    const canvasArea = document.getElementById('lab-canvas-area');
+    const canvas = document.getElementById('graph-canvas');
+    const ctx = canvas.getContext('2d');
+    const modeBadge = document.getElementById('canvas-mode-badge');
+    const canvasInfo = document.getElementById('canvas-info');
+
+    // ── Canvas sizing ─────────────────────────────────────────────────
+
+    function resizeCanvas() {
+      const rect = canvasArea.getBoundingClientRect();
+      canvas.width = rect.width * window.devicePixelRatio;
+      canvas.height = rect.height * window.devicePixelRatio;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+      draw();
+    }
+    window.addEventListener('resize', resizeCanvas);
+    setTimeout(resizeCanvas, 100);
+
+    // ── Coordinate transforms ─────────────────────────────────────────
+
+    function screenToWorld(sx, sy) {
+      const rect = canvasArea.getBoundingClientRect();
+      return {
+        x: (sx - rect.left - state.pan.x) / state.zoom,
+        y: (sy - rect.top - state.pan.y) / state.zoom,
+      };
+    }
+
+    function worldToScreen(wx, wy) {
+      return {
+        x: wx * state.zoom + state.pan.x,
+        y: wy * state.zoom + state.pan.y,
+      };
+    }
+
+    // ── Presets ────────────────────────────────────────────────────────
+
+    const PRESETS = {
+      '3regions': {
+        nodes: [
+          { name: 'A', demand: 5, capacity: 20, x: 150, y: 100 },
+          { name: 'B', demand: 8, capacity: 15, x: 350, y: 80 },
+          { name: 'C', demand: 3, capacity: 25, x: 550, y: 120 },
+          { name: 'D', demand: 10, capacity: 10, x: 200, y: 300 },
+          { name: 'E', demand: 6, capacity: 18, x: 400, y: 280 },
+          { name: 'F', demand: 4, capacity: 22, x: 500, y: 320 },
+        ],
+        edges: [
+          { u: 0, v: 1, w: 10 }, { u: 1, v: 2, w: 15 }, { u: 0, v: 3, w: 8 },
+          { u: 1, v: 4, w: 12 }, { u: 2, v: 5, w: 7 }, { u: 3, v: 4, w: 20 },
+          { u: 4, v: 5, w: 9 },
+        ]
+      },
+      'ring': {
+        nodes: [
+          { name: 'N0', demand: 4, capacity: 15, x: 350, y: 80 },
+          { name: 'N1', demand: 6, capacity: 15, x: 530, y: 160 },
+          { name: 'N2', demand: 5, capacity: 15, x: 560, y: 320 },
+          { name: 'N3', demand: 7, capacity: 15, x: 430, y: 430 },
+          { name: 'N4', demand: 3, capacity: 15, x: 250, y: 430 },
+          { name: 'N5', demand: 8, capacity: 15, x: 130, y: 320 },
+          { name: 'N6', demand: 4, capacity: 15, x: 150, y: 160 },
+          { name: 'N7', demand: 5, capacity: 15, x: 350, y: 250 },
+        ],
+        edges: [
+          { u: 0, v: 1, w: 10 }, { u: 1, v: 2, w: 12 }, { u: 2, v: 3, w: 8 },
+          { u: 3, v: 4, w: 14 }, { u: 4, v: 5, w: 11 }, { u: 5, v: 6, w: 9 },
+          { u: 6, v: 0, w: 13 }, { u: 7, v: 0, w: 6 },
+        ]
+      },
+      'star': {
+        nodes: [
+          { name: 'Hub', demand: 2, capacity: 50, x: 350, y: 250 },
+          { name: 'S1', demand: 8, capacity: 10, x: 350, y: 80 },
+          { name: 'S2', demand: 6, capacity: 10, x: 530, y: 180 },
+          { name: 'S3', demand: 9, capacity: 10, x: 500, y: 380 },
+          { name: 'S4', demand: 7, capacity: 10, x: 200, y: 380 },
+          { name: 'S5', demand: 5, capacity: 10, x: 170, y: 180 },
+          { name: 'S6', demand: 4, capacity: 10, x: 350, y: 430 },
+        ],
+        edges: [
+          { u: 0, v: 1, w: 5 }, { u: 0, v: 2, w: 8 }, { u: 0, v: 3, w: 6 },
+          { u: 0, v: 4, w: 7 }, { u: 0, v: 5, w: 9 }, { u: 0, v: 6, w: 4 },
+        ]
+      },
+      'mesh': (() => {
+        const g = generateRandomGraph(9, 0.5, 5, 20, 1, 10, 10, 30, 42);
+        const cx = 350, cy = 250, r = 180;
+        g.nodes.forEach((n, i) => {
+          const angle = (2 * Math.PI * i) / g.nodes.length - Math.PI / 2;
+          n.x = cx + r * Math.cos(angle) + (i % 2 === 0 ? 30 : -30);
+          n.y = cy + r * Math.sin(angle) + (i % 3 === 0 ? 20 : -20);
+        });
+        return g;
+      })(),
+      'failure': {
+        nodes: [
+          { name: 'DC-A', demand: 10, capacity: 30, x: 150, y: 200 },
+          { name: 'DC-B', demand: 8, capacity: 25, x: 350, y: 100 },
+          { name: 'DC-C', demand: 6, capacity: 20, x: 550, y: 200 },
+          { name: 'DC-D', demand: 12, capacity: 15, x: 200, y: 380 },
+          { name: 'DC-E', demand: 5, capacity: 20, x: 400, y: 350 },
+          { name: 'DC-F', demand: 7, capacity: 18, x: 550, y: 380 },
+        ],
+        edges: [
+          { u: 0, v: 1, w: 12 }, { u: 1, v: 2, w: 10 },
+          { u: 0, v: 3, w: 15 }, { u: 3, v: 4, w: 8 }, { u: 4, v: 2, w: 11 },
+        ]
+      },
+      'cdn': (() => {
+        const g = generateRandomGraph(12, 0.35, 3, 15, 1, 12, 8, 25, 99);
+        const cx = 350, cy = 250, r = 200;
+        g.nodes.forEach((n, i) => {
+          const angle = (2 * Math.PI * i) / g.nodes.length - Math.PI / 2;
+          n.x = cx + r * Math.cos(angle);
+          n.y = cy + r * Math.sin(angle);
+        });
+        return g;
+      })(),
+    };
+
+    // ── Load preset ───────────────────────────────────────────────────
+
+    function loadPreset(name) {
+      const preset = PRESETS[name];
+      if (!preset) return;
+
+      state.nodes = preset.nodes.map((n, i) => ({
+        id: i, x: n.x, y: n.y,
+        name: n.name || `N${i}`,
+        demand: n.demand || 1,
+        capacity: n.capacity || 20,
+      }));
+      state.edges = preset.edges.map(e => ({ u: e.u, v: e.v, w: e.w }));
+      state.nextId = state.nodes.length;
+      state.selected = null;
+      state.edgeStart = null;
+      state.results = [];
+      state.bestResult = null;
+
+      clearResults();
+      updateSidebar();
+      centerGraph();
+      draw();
+    }
+
+    function centerGraph() {
+      if (state.nodes.length === 0) return;
+      const rect = canvasArea.getBoundingClientRect();
+      const minX = Math.min(...state.nodes.map(n => n.x));
+      const maxX = Math.max(...state.nodes.map(n => n.x));
+      const minY = Math.min(...state.nodes.map(n => n.y));
+      const maxY = Math.max(...state.nodes.map(n => n.y));
+      const graphW = maxX - minX + 100;
+      const graphH = maxY - minY + 100;
+      state.zoom = Math.min(rect.width / graphW, rect.height / graphH, 1.5);
+      state.pan.x = (rect.width - graphW * state.zoom) / 2 - minX * state.zoom + 50 * state.zoom;
+      state.pan.y = (rect.height - graphH * state.zoom) / 2 - minY * state.zoom + 50 * state.zoom;
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    // DRAWING
+    // ═══════════════════════════════════════════════════════════════════
+
+    function draw() {
+      const rect = canvasArea.getBoundingClientRect();
+      const W = rect.width, H = rect.height;
+      ctx.clearRect(0, 0, W, H);
+
+      // Grid dots
+      ctx.fillStyle = 'rgba(233,232,220,0.04)';
+      const gridSize = 40 * state.zoom;
+      const offsetX = state.pan.x % gridSize;
+      const offsetY = state.pan.y % gridSize;
+      for (let x = offsetX; x < W; x += gridSize) {
+        for (let y = offsetY; y < H; y += gridSize) {
+          ctx.beginPath();
+          ctx.arc(x, y, 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Draw edges
+      for (const edge of state.edges) {
+        const from = worldToScreen(state.nodes[edge.u].x, state.nodes[edge.u].y);
+        const to = worldToScreen(state.nodes[edge.v].x, state.nodes[edge.v].y);
+
+        // Check if this edge is in the best result MST or similar
+        const isHighlighted = state.bestResult &&
+          state.bestResult.replicaSites &&
+          (state.bestResult.replicaSites.includes(edge.u) || state.bestResult.replicaSites.includes(edge.v));
+
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.strokeStyle = isHighlighted ? 'rgba(216,255,62,0.4)' : 'rgba(233,232,220,0.2)';
+        ctx.lineWidth = isHighlighted ? 2 : 1;
+        ctx.stroke();
+
+        // Weight label
+        const mx = (from.x + to.x) / 2;
+        const my = (from.y + to.y) / 2;
+        ctx.font = `${10 * Math.min(state.zoom, 1.2)}px "JetBrains Mono", monospace`;
+        ctx.fillStyle = 'rgba(233,232,220,0.35)';
+        ctx.textAlign = 'center';
+        ctx.fillText(edge.w, mx, my - 5);
+      }
+
+      // Draw edge being created
+      if (state.mode === 'addEdge' && state.edgeStart !== null) {
+        const from = worldToScreen(state.nodes[state.edgeStart].x, state.nodes[state.edgeStart].y);
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(state.lastMouse.x - canvasArea.getBoundingClientRect().left, state.lastMouse.y - canvasArea.getBoundingClientRect().top);
+        ctx.strokeStyle = 'rgba(216,255,62,0.5)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Draw nodes
+      for (let i = 0; i < state.nodes.length; i++) {
+        const node = state.nodes[i];
+        const pos = worldToScreen(node.x, node.y);
+        const r = 18 * state.zoom;
+
+        const isReplica = state.bestResult &&
+          state.bestResult.replicaSites &&
+          state.bestResult.replicaSites.includes(i);
+        const isSelected = state.selected === i;
+
+        // Glow for replicas
+        if (isReplica) {
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, r * 2, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(216,255,62,0.08)';
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, r * 1.4, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(216,255,62,0.12)';
+          ctx.fill();
+        }
+
+        // Node circle
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+        if (isReplica) {
+          ctx.fillStyle = '#d8ff3e';
+        } else if (isSelected) {
+          ctx.fillStyle = '#e9e8dc';
+        } else {
+          ctx.fillStyle = 'rgba(233,232,220,0.25)';
+        }
+        ctx.fill();
+
+        if (isSelected) {
+          ctx.strokeStyle = '#d8ff3e';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        // Node label
+        const fontSize = Math.max(9, 11 * state.zoom);
+        ctx.font = `600 ${fontSize}px "Inter Tight", sans-serif`;
+        ctx.fillStyle = isReplica ? '#14160f' : '#e9e8dc';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(node.name, pos.x, pos.y);
+
+        // Demand badge below
+        if (state.zoom > 0.5) {
+          ctx.font = `${Math.max(8, 9 * state.zoom)}px "JetBrains Mono", monospace`;
+          ctx.fillStyle = 'rgba(233,232,220,0.35)';
+          ctx.fillText(`d=${node.demand}`, pos.x, pos.y + r + 10);
+        }
+      }
+
+      // Canvas info
+      canvasInfo.textContent = `${state.nodes.length} nodes · ${state.edges.length} edges · zoom ${(state.zoom * 100).toFixed(0)}%`;
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    // INTERACTION
+    // ═══════════════════════════════════════════════════════════════════
+
+    function findNodeAt(sx, sy) {
+      const rect = canvasArea.getBoundingClientRect();
+      const cx = sx - rect.left, cy = sy - rect.top;
+      for (let i = state.nodes.length - 1; i >= 0; i--) {
+        const pos = worldToScreen(state.nodes[i].x, state.nodes[i].y);
+        const dist = Math.hypot(pos.x - cx, pos.y - cy);
+        if (dist < 20 * state.zoom) return i;
+      }
+      return -1;
+    }
+
+    canvas.addEventListener('mousedown', e => {
+      state.mouseDown = true;
+      state.lastMouse = { x: e.clientX, y: e.clientY };
+      const nodeIdx = findNodeAt(e.clientX, e.clientY);
+
+      if (state.mode === 'select') {
+        if (nodeIdx >= 0) {
+          state.selected = nodeIdx;
+          state.dragging = nodeIdx;
+        } else {
+          state.selected = null;
+          // Start panning
+        }
+      } else if (state.mode === 'addNode') {
+        const world = screenToWorld(e.clientX - canvasArea.getBoundingClientRect().left, e.clientY - canvasArea.getBoundingClientRect().top);
+        const newNode = {
+          id: state.nextId,
+          x: world.x, y: world.y,
+          name: `N${state.nextId}`,
+          demand: Math.ceil(Math.random() * 10),
+          capacity: 15 + Math.floor(Math.random() * 20),
+        };
+        state.nodes.push(newNode);
+        state.nextId++;
+        state.selected = state.nodes.length - 1;
+        updateSidebar();
+      } else if (state.mode === 'addEdge') {
+        if (nodeIdx >= 0) {
+          if (state.edgeStart === null) {
+            state.edgeStart = nodeIdx;
+            state.selected = nodeIdx;
+          } else if (state.edgeStart !== nodeIdx) {
+            // Check for duplicate
+            const u = Math.min(state.edgeStart, nodeIdx);
+            const v = Math.max(state.edgeStart, nodeIdx);
+            const exists = state.edges.some(e => e.u === u && e.v === v);
+            if (!exists) {
+              const w = Math.ceil(Math.random() * 20 + 5);
+              state.edges.push({ u, v, w });
+              updateSidebar();
+            }
+            state.edgeStart = null;
+            state.selected = null;
+          }
+        } else {
+          state.edgeStart = null;
+        }
+      } else if (state.mode === 'delete') {
+        if (nodeIdx >= 0) {
+          deleteNode(nodeIdx);
+        } else {
+          // Try to find edge near click
+          const rect = canvasArea.getBoundingClientRect();
+          const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+          let closestEdge = -1, closestDist = 12;
+          for (let i = 0; i < state.edges.length; i++) {
+            const edge = state.edges[i];
+            const from = worldToScreen(state.nodes[edge.u].x, state.nodes[edge.u].y);
+            const to = worldToScreen(state.nodes[edge.v].x, state.nodes[edge.v].y);
+            const d = distToSegment(cx, cy, from.x, from.y, to.x, to.y);
+            if (d < closestDist) { closestDist = d; closestEdge = i; }
+          }
+          if (closestEdge >= 0) {
+            state.edges.splice(closestEdge, 1);
+            updateSidebar();
+          }
+        }
+      }
+
+      draw();
+    });
+
+    canvas.addEventListener('mousemove', e => {
+      state.lastMouse = { x: e.clientX, y: e.clientY };
+
+      if (state.mouseDown && state.dragging !== null && state.mode === 'select') {
+        const rect = canvasArea.getBoundingClientRect();
+        const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+        state.nodes[state.dragging].x = world.x;
+        state.nodes[state.dragging].y = world.y;
+        draw();
+      } else if (state.mouseDown && state.dragging === null && state.mode === 'select') {
+        // Pan
+        const dx = e.clientX - state.lastMouse.x;
+        const dy = e.clientY - state.lastMouse.y;
+        // Note: lastMouse already updated, so we track the delta differently
+      }
+
+      if (state.mode === 'addEdge' && state.edgeStart !== null) {
+        draw();
+      }
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      state.mouseDown = false;
+      state.dragging = null;
+    });
+
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const rect = canvasArea.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      const oldZoom = state.zoom;
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      state.zoom = Math.max(0.2, Math.min(3, state.zoom * delta));
+
+      // Zoom towards mouse
+      state.pan.x = mx - (mx - state.pan.x) * (state.zoom / oldZoom);
+      state.pan.y = my - (my - state.pan.y) * (state.zoom / oldZoom);
+
+      draw();
+    }, { passive: false });
+
+    function distToSegment(px, py, x1, y1, x2, y2) {
+      const dx = x2 - x1, dy = y2 - y1;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq === 0) return Math.hypot(px - x1, py - y1);
+      let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+      t = Math.max(0, Math.min(1, t));
+      return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+    }
+
+    function deleteNode(idx) {
+      state.nodes.splice(idx, 1);
+      // Fix edge indices
+      state.edges = state.edges
+        .filter(e => e.u !== idx && e.v !== idx)
+        .map(e => ({
+          u: e.u > idx ? e.u - 1 : e.u,
+          v: e.v > idx ? e.v - 1 : e.v,
+          w: e.w
+        }));
+      state.selected = null;
+      state.bestResult = null;
+      state.results = [];
+      clearResults();
+      updateSidebar();
+      draw();
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    // MODE SWITCHING
+    // ═══════════════════════════════════════════════════════════════════
+
+    const modeButtons = document.querySelectorAll('[data-mode]');
+    modeButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.mode = btn.dataset.mode;
+        state.edgeStart = null;
+        modeButtons.forEach(b => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+        modeBadge.textContent = state.mode.toUpperCase().replace('ADDNODE', 'ADD NODE').replace('ADDEDGE', 'ADD EDGE');
+
+        canvasArea.style.cursor =
+          state.mode === 'addNode' ? 'cell' :
+          state.mode === 'addEdge' ? 'crosshair' :
+          state.mode === 'delete' ? 'not-allowed' :
+          'grab';
+        draw();
+      });
+    });
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ALGORITHMS
+    // ═══════════════════════════════════════════════════════════════════
+
+    function getGraphData() {
+      return {
+        nodes: state.nodes.map(n => ({
+          name: n.name, demand: n.demand, capacity: n.capacity
+        })),
+        edges: state.edges.map(e => ({ u: e.u, v: e.v, w: e.w })),
+      };
+    }
+
+    function runAlgorithms(which) {
+      const g = getGraphData();
+      const n = g.nodes.length;
+      const k = parseInt(document.getElementById('k-input').value) || 2;
+
+      if (n < 2) {
+        alert('Need at least 2 nodes to run placement algorithms.');
+        return;
+      }
+      if (k >= n) {
+        alert('k must be less than number of nodes.');
+        return;
+      }
+
+      // Validate connectivity
+      const adj = buildAdj(n, g.edges);
+      const conn = checkConnectivity(n, adj);
+      document.getElementById('stat-connected').textContent = conn.connected ? 'Yes' : 'No';
+
+      if (!conn.connected) {
+        alert('Graph is not connected! Add edges to connect all nodes.');
+        return;
+      }
+
+      // Floyd-Warshall for distance matrix
+      const fwResult = floydWarshall(n, g.edges);
+      const dist = fwResult.result.dist;
+
+      const results = [];
+      const stepLog = document.getElementById('step-log');
+      let allSteps = [];
+
+      try {
+        if (which === 'all' || which === 'exact') {
+          // Bitmask DP (only for small n)
+          if (n <= 20) {
+            const t0 = performance.now();
+            const bitmask = bitmaskDPPlacement(n, dist, g.nodes, k);
+            const t1 = performance.now();
+            results.push({
+              name: 'Bitmask DP', type: 'exact',
+              latency: bitmask.result.objective,
+              sites: bitmask.result.sites,
+              replicaSites: bitmask.result.sites,
+              time: (t1 - t0).toFixed(1),
+              steps: bitmask.steps || [],
+            });
+            allSteps = allSteps.concat(bitmask.steps || []);
+          }
+
+          // Tree DP
+          const mstResult = kruskal(n, g.edges);
+          const t2 = performance.now();
+          const tdp = treeDPPlacement(n, mstResult.result.edges, dist, g.nodes, k);
+          const t3 = performance.now();
+          results.push({
+            name: 'Tree DP', type: 'heuristic',
+            latency: tdp.result.objective,
+            sites: tdp.result.sites,
+            replicaSites: tdp.result.sites,
+            time: (t3 - t2).toFixed(1),
+            steps: tdp.steps || [],
+          });
+          allSteps = allSteps.concat(tdp.steps || []);
+        }
+
+        if (which === 'all' || which === 'heuristic') {
+          // Greedy
+          const t4 = performance.now();
+          const greedy = greedyPlacement(n, dist, g.nodes, k);
+          const t5 = performance.now();
+          results.push({
+            name: 'Greedy', type: 'heuristic',
+            latency: greedy.result.objective,
+            sites: greedy.result.sites,
+            replicaSites: greedy.result.sites,
+            time: (t5 - t4).toFixed(1),
+            steps: greedy.steps || [],
+          });
+          allSteps = allSteps.concat(greedy.steps || []);
+
+          // Local Search
+          const t6 = performance.now();
+          const local = localSearchPlacement(n, dist, g.nodes, k);
+          const t7 = performance.now();
+          results.push({
+            name: 'Local Search', type: 'heuristic',
+            latency: local.result.objective,
+            sites: local.result.sites,
+            replicaSites: local.result.sites,
+            time: (t7 - t6).toFixed(1),
+            steps: local.steps || [],
+          });
+          allSteps = allSteps.concat(local.steps || []);
+        }
+
+        // Random baseline
+        const rand = randomBaseline(n, dist, g.nodes, k);
+        results.push({
+          name: 'Random', type: 'baseline',
+          latency: rand.result.objective,
+          sites: rand.result.sites,
+          replicaSites: rand.result.sites,
+          time: '0',
+          steps: [],
+        });
+
+      } catch (err) {
+        console.error('Algorithm error:', err);
+        alert('Algorithm error: ' + err.message);
+        return;
+      }
+
+      // Find best
+      results.sort((a, b) => a.latency - b.latency);
+      state.results = results;
+      state.bestResult = results[0];
+
+      // Compute detailed metrics for best
+      const bestMetrics = computeLatencyMetrics(state.bestResult.replicaSites, dist, g.nodes);
+      const fairness = jainFairness(bestMetrics.latencies);
+
+      displayResults(results, bestMetrics, fairness, allSteps);
+      draw();
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    // DISPLAY RESULTS
+    // ═══════════════════════════════════════════════════════════════════
+
+    function clearResults() {
+      document.getElementById('results-container').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">⬡</div>
+          <p>Load a preset or build a graph, then hit <strong>▶ RUN ALL</strong></p>
+        </div>`;
+      document.getElementById('metrics-section').style.display = 'none';
+      document.getElementById('step-log').innerHTML = `
+        <div class="empty-state"><p>Run an algorithm to see steps</p></div>`;
+    }
+
+    function displayResults(results, metrics, fairness, steps) {
+      const container = document.getElementById('results-container');
+      container.innerHTML = '';
+
+      results.forEach((r, i) => {
+        const isBest = i === 0;
+        const card = document.createElement('div');
+        card.className = `algo-result-card${isBest ? ' best' : ''}`;
+        card.innerHTML = `
+          <div class="algo-card-header">
+            <span class="algo-card-name">${r.name}</span>
+            <span>
+              ${isBest ? '<span class="algo-card-badge best-badge">BEST</span> ' : ''}
+              <span class="algo-card-badge ${r.type}">${r.type.toUpperCase()}</span>
+            </span>
+          </div>
+          <div class="algo-card-row"><span>Latency</span><span class="value">${r.latency.toFixed(2)} ms</span></div>
+          <div class="algo-card-row"><span>Time</span><span class="value">${r.time} ms</span></div>
+          <div class="algo-card-sites">Sites: [${r.sites.map(s => state.nodes[s]?.name || s).join(', ')}]</div>
+        `;
+        card.addEventListener('click', () => {
+          state.bestResult = r;
+          draw();
+          // Highlight this card
+          container.querySelectorAll('.algo-result-card').forEach(c => c.classList.remove('best'));
+          card.classList.add('best');
+        });
+        container.appendChild(card);
+      });
+
+      // Metrics
+      const metricsSection = document.getElementById('metrics-section');
+      metricsSection.style.display = '';
+      const grid = document.getElementById('metrics-grid');
+      grid.innerHTML = `
+        <div class="metric-card">
+          <div class="metric-label">Weighted Avg</div>
+          <div class="metric-value">${metrics.weightedAvg.toFixed(2)} ms</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Fairness</div>
+          <div class="metric-value">${fairness.toFixed(4)}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Median</div>
+          <div class="metric-value neutral">${metrics.median.toFixed(1)} ms</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">P95</div>
+          <div class="metric-value neutral">${metrics.p95.toFixed(1)} ms</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Max</div>
+          <div class="metric-value neutral">${metrics.max.toFixed(1)} ms</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Min</div>
+          <div class="metric-value neutral">${metrics.min.toFixed(1)} ms</div>
+        </div>
+        ${results.length > 1 ? `
+        <div class="metric-card full-width">
+          <div class="metric-label">vs Random</div>
+          <div class="metric-value">${results[results.length - 1].latency > 0 ?
+            '-' + ((1 - results[0].latency / results[results.length - 1].latency) * 100).toFixed(1) + '%' : '—'}</div>
+        </div>` : ''}
+      `;
+
+      // Step log
+      const stepLog = document.getElementById('step-log');
+      if (steps.length > 0) {
+        stepLog.innerHTML = steps.slice(0, 100).map(s =>
+          `<div class="step-entry"><span class="step-type">${s.type || 'step'}</span> ${s.caption || ''}</div>`
+        ).join('');
+        if (steps.length > 100) {
+          stepLog.innerHTML += `<div class="step-entry" style="color:var(--lime-400);">… and ${steps.length - 100} more steps</div>`;
+        }
+      } else {
+        stepLog.innerHTML = '<div class="empty-state"><p>No step data</p></div>';
+      }
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SIDEBAR UPDATES
+    // ═══════════════════════════════════════════════════════════════════
+
+    function updateSidebar() {
+      document.getElementById('stat-nodes').textContent = state.nodes.length;
+      document.getElementById('stat-edges').textContent = state.edges.length;
+      document.getElementById('stat-k').textContent = document.getElementById('k-input').value;
+
+      if (state.nodes.length >= 2) {
+        const adj = buildAdj(state.nodes.length, state.edges);
+        const conn = checkConnectivity(state.nodes.length, adj);
+        document.getElementById('stat-connected').textContent = conn.connected ? 'Yes' : 'No';
+      } else {
+        document.getElementById('stat-connected').textContent = '—';
+      }
+
+      // Node list
+      const nodeList = document.getElementById('node-list');
+      if (state.nodes.length === 0) {
+        nodeList.innerHTML = '<div class="empty-state"><p>No nodes yet</p></div>';
+      } else {
+        nodeList.innerHTML = state.nodes.map((n, i) => `
+          <div class="node-row">
+            <span class="node-id">${n.name}</span>
+            <span class="node-demand">d=${n.demand} c=${n.capacity}</span>
+            <button class="node-delete" data-idx="${i}" title="Delete node">✕</button>
+          </div>
+        `).join('');
+        nodeList.querySelectorAll('.node-delete').forEach(btn => {
+          btn.addEventListener('click', e => {
+            e.stopPropagation();
+            deleteNode(parseInt(btn.dataset.idx));
+          });
+        });
+      }
+
+      // Edge list
+      const edgeList = document.getElementById('edge-list');
+      if (state.edges.length === 0) {
+        edgeList.innerHTML = '<div class="empty-state"><p>No edges yet</p></div>';
+      } else {
+        edgeList.innerHTML = state.edges.map((e, i) => `
+          <div class="edge-row">
+            <span>${state.nodes[e.u]?.name || e.u} → ${state.nodes[e.v]?.name || e.v}</span>
+            <span style="color:var(--text-muted-dark)">w=${e.w}</span>
+            <button class="edge-delete" data-idx="${i}" title="Delete edge">✕</button>
+          </div>
+        `).join('');
+        edgeList.querySelectorAll('.edge-delete').forEach(btn => {
+          btn.addEventListener('click', e => {
+            e.stopPropagation();
+            state.edges.splice(parseInt(btn.dataset.idx), 1);
+            updateSidebar();
+            draw();
+          });
+        });
+      }
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TOOLBAR EVENTS
+    // ═══════════════════════════════════════════════════════════════════
+
+    document.getElementById('preset-select').addEventListener('change', e => {
+      if (e.target.value !== 'custom') loadPreset(e.target.value);
+    });
+
+    document.getElementById('k-input').addEventListener('change', () => {
+      document.getElementById('stat-k').textContent = document.getElementById('k-input').value;
+    });
+
+    document.getElementById('run-all-btn').addEventListener('click', () => runAlgorithms('all'));
+    document.getElementById('run-exact-btn').addEventListener('click', () => runAlgorithms('exact'));
+    document.getElementById('run-heuristic-btn').addEventListener('click', () => runAlgorithms('heuristic'));
+
+    document.getElementById('clear-btn').addEventListener('click', () => {
+      state.nodes = [];
+      state.edges = [];
+      state.nextId = 0;
+      state.selected = null;
+      state.results = [];
+      state.bestResult = null;
+      clearResults();
+      updateSidebar();
+      draw();
+      document.getElementById('preset-select').value = 'custom';
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      if (e.key === '1') document.getElementById('mode-select').click();
+      if (e.key === '2') document.getElementById('mode-add-node').click();
+      if (e.key === '3') document.getElementById('mode-add-edge').click();
+      if (e.key === '4') document.getElementById('mode-delete').click();
+      if (e.key === 'r' || e.key === 'R') document.getElementById('run-all-btn').click();
+      if (e.key === 'Escape') { state.edgeStart = null; state.selected = null; draw(); }
+      if (e.key === 'Delete' && state.selected !== null) { deleteNode(state.selected); }
+    });
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Load default preset
+    loadPreset('3regions');
+
+    // Check URL params
+    const params = new URLSearchParams(window.location.search);
+    const presetParam = params.get('preset');
+    if (presetParam) {
+      const map = { 'PRE-001': '3regions', 'PRE-002': 'ring', 'PRE-003': 'star',
+        'PRE-004': 'mesh', 'PRE-005': 'failure', 'PRE-006': 'cdn' };
+      const key = map[presetParam];
+      if (key) {
+        document.getElementById('preset-select').value = key;
+        loadPreset(key);
+      }
+    }
+  </script>
+</body>
+</html>

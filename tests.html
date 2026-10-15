@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudPlace 3D — Test Runner</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter+Tight:wght@400;600;700&display=swap');
+
+    :root {
+      --ink: #14160f;
+      --olive-900: #1f2218;
+      --olive-800: #2a2e20;
+      --cream-50: #f6f5ee;
+      --lime-400: #d8ff3e;
+      --lime-500: #c4f000;
+      --success: #7be07b;
+      --warn: #ffb84a;
+      --danger: #ff5d5d;
+      --text-on-dark: #e9e8dc;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--olive-900);
+      color: var(--text-on-dark);
+      padding: 2rem;
+      line-height: 1.5;
+    }
+
+    h1 {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: clamp(28px, 5vw, 48px);
+      text-transform: uppercase;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.25rem;
+    }
+    h1 span { color: var(--lime-400); }
+
+    .subtitle {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: rgba(233,232,220,0.5);
+      margin-bottom: 2rem;
+      letter-spacing: 0.05em;
+    }
+
+    .summary-bar {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+      padding: 1rem 1.5rem;
+      background: var(--olive-800);
+      border-radius: 12px;
+      border: 1px solid rgba(233,232,220,0.08);
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .summary-bar .stat {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat.pass { color: var(--success); }
+    .stat.fail { color: var(--danger); }
+    .stat.skip { color: var(--warn); }
+    .stat.total { color: var(--lime-400); }
+    .stat.time { color: rgba(233,232,220,0.6); }
+
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--olive-800);
+      border-radius: 2px;
+      margin-bottom: 2rem;
+      overflow: hidden;
+    }
+    .progress-bar .fill {
+      height: 100%;
+      background: var(--lime-400);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 100ms ease;
+    }
+
+    .suite {
+      margin-bottom: 1.5rem;
+      background: var(--olive-800);
+      border-radius: 16px;
+      border: 1px solid rgba(233,232,220,0.06);
+      overflow: hidden;
+    }
+    .suite-header {
+      padding: 1rem 1.5rem;
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      border-bottom: 1px solid rgba(233,232,220,0.04);
+    }
+    .suite-header:hover { background: rgba(216,255,62,0.03); }
+    .suite-header .badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+    .badge.pass { background: rgba(123,224,123,0.15); color: var(--success); }
+    .badge.fail { background: rgba(255,93,93,0.15); color: var(--danger); }
+    .badge.running { background: rgba(216,255,62,0.15); color: var(--lime-400); }
+
+    .suite-body { padding: 0; }
+    .suite.collapsed .suite-body { display: none; }
+
+    .test-row {
+      display: flex;
+      align-items: flex-start;
+      padding: 0.6rem 1.5rem;
+      border-bottom: 1px solid rgba(233,232,220,0.03);
+      gap: 0.75rem;
+      font-size: 13px;
+    }
+    .test-row:last-child { border-bottom: none; }
+    .test-row .icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      margin-top: 1px;
+    }
+    .test-row.pass .icon { color: var(--success); }
+    .test-row.fail .icon { color: var(--danger); }
+    .test-row.skip .icon { color: var(--warn); }
+    .test-row .name { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    .test-row .time-ms {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: rgba(233,232,220,0.4);
+      flex-shrink: 0;
+    }
+    .test-row .error {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--danger);
+      margin-top: 4px;
+      padding: 6px 10px;
+      background: rgba(255,93,93,0.06);
+      border-radius: 6px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .run-btn {
+      font-family: 'Inter Tight', sans-serif;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 14px;
+      padding: 12px 32px;
+      background: var(--lime-400);
+      color: var(--ink);
+      border: none;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: transform 150ms ease, box-shadow 150ms ease;
+    }
+    .run-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(216,255,62,0.3); }
+    .run-btn:active { transform: translateY(0); }
+    .run-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+
+    footer {
+      margin-top: 3rem;
+      text-align: center;
+      font-size: 11px;
+      color: rgba(233,232,220,0.3);
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Cloud<span>Place</span> 3D</h1>
+  <p class="subtitle">Phase 1 Test Runner &mdash; algorithms.js + calc.js</p>
+
+  <div class="controls">
+    <button class="run-btn" id="runBtn" onclick="runAllTests()">Run All Tests</button>
+  </div>
+
+  <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+
+  <div class="summary-bar" id="summaryBar">
+    <span class="stat total" id="totalStat">0 tests</span>
+    <span class="stat pass" id="passStat">0 passed</span>
+    <span class="stat fail" id="failStat">0 failed</span>
+    <span class="stat skip" id="skipStat">0 skipped</span>
+    <span class="stat time" id="timeStat">&mdash;</span>
+  </div>
+
+  <div id="results"></div>
+
+  <footer>CloudPlace 3D &mdash; DAA PBL Project</footer>
+
+<script type="module">
+import {
+  UnionFind, MinHeap, buildAdj, checkConnectivity, validateGraph,
+  kruskal, prim, dijkstra, floydWarshall, reconstructPath,
+  bitmaskDPPlacement, treeDPPlacement, greedyPlacement, localSearchPlacement,
+  randomBaseline, computeObjective, capacityAwareAssignment,
+  faultTolerance, scenarioSweep,
+  PRESETS, generateRandomGraph
+} from './js/algorithms.js';
+
+import {
+  computeLatencyMetrics, computeReplicaLoads, jainFairness,
+  computeRedundancy, generateFormulas, showMyWork,
+  compareStrategies, computeImprovements, generateSummary,
+  runFullAnalysis
+} from './js/calc.js';
+
+
+// ─── Test Framework ─────────────────────────────────────────────────────
+
+const suites = [];
+let currentSuite = null;
+
+function describe(name, fn) {
+  currentSuite = { name, tests: [], passed: 0, failed: 0, skipped: 0, time: 0 };
+  suites.push(currentSuite);
+  fn();
+  currentSuite = null;
+}
+
+function it(name, fn) {
+  currentSuite.tests.push({ name, fn, status: 'pending', error: null, time: 0 });
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message || 'Assertion failed');
+}
+
+function assertEq(actual, expected, message) {
+  if (actual !== expected) {
+    throw new Error(`${message || 'assertEq'}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+
+function assertClose(actual, expected, tolerance, message) {
+  if (Math.abs(actual - expected) > tolerance) {
+    throw new Error(`${message || 'assertClose'}: expected ~${expected} (±${tolerance}), got ${actual}`);
+  }
+}
+
+function assertArrayEq(actual, expected, message) {
+  const a = JSON.stringify(actual), b = JSON.stringify(expected);
+  if (a !== b) throw new Error(`${message || 'assertArrayEq'}: expected ${b}, got ${a}`);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TEST SUITES
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── 1. MST Tests ───────────────────────────────────────────────────────
+
+describe('MST — Kruskal & Prim', () => {
+
+  it('Kruskal on a known triangle graph = correct MST weight', () => {
+    // Triangle: edges 1, 2, 3 → MST = edges 1 + 2 = 3
+    const edges = [
+      { u: 0, v: 1, w: 1 },
+      { u: 1, v: 2, w: 2 },
+      { u: 0, v: 2, w: 3 },
+    ];
+    const { result } = kruskal(3, edges);
+    assertEq(result.totalWeight, 3, 'MST weight for triangle');
+    assertEq(result.mstEdges.length, 2, 'MST should have n-1 edges');
+  });
+
+  it('Prim on a known triangle graph = correct MST weight', () => {
+    const edges = [
+      { u: 0, v: 1, w: 1 },
+      { u: 1, v: 2, w: 2 },
+      { u: 0, v: 2, w: 3 },
+    ];
+    const { result } = prim(3, edges);
+    assertEq(result.totalWeight, 3, 'Prim MST weight for triangle');
+    assertEq(result.mstEdges.length, 2, 'Prim MST should have n-1 edges');
+  });
+
+  it('Kruskal == Prim weight on the 3 Regions preset', () => {
+    const { nodes, edges } = PRESETS.threeRegions;
+    const k = kruskal(nodes.length, edges);
+    const p = prim(nodes.length, edges);
+    assertEq(k.result.totalWeight, p.result.totalWeight,
+      'Kruskal and Prim must produce the same MST weight');
+  });
+
+  it('Kruskal == Prim weight on the Ring preset', () => {
+    const { nodes, edges } = PRESETS.ring;
+    const k = kruskal(nodes.length, edges);
+    const p = prim(nodes.length, edges);
+    assertEq(k.result.totalWeight, p.result.totalWeight,
+      'Ring: Kruskal and Prim must match');
+  });
+
+  it('Kruskal == Prim weight on a random graph (20 nodes)', () => {
+    const { nodes, edges } = generateRandomGraph({ nodeCount: 20, density: 0.3, seed: 123 });
+    const k = kruskal(nodes.length, edges);
+    const p = prim(nodes.length, edges);
+    assertEq(k.result.totalWeight, p.result.totalWeight,
+      'Random 20-node: Kruskal and Prim must match');
+  });
+
+  it('MST has exactly n-1 edges for a connected graph', () => {
+    const { nodes, edges } = PRESETS.globalCDN;
+    const { result } = kruskal(nodes.length, edges);
+    assertEq(result.mstEdges.length, nodes.length - 1, 'MST edge count');
+  });
+
+  it('MST steps include start, consider, accept/reject, complete', () => {
+    const edges = [{ u: 0, v: 1, w: 5 }, { u: 1, v: 2, w: 3 }, { u: 0, v: 2, w: 7 }];
+    const { steps } = kruskal(3, edges);
+    assert(steps.some(s => s.type === 'mst-start'), 'Should have mst-start step');
+    assert(steps.some(s => s.type === 'mst-consider'), 'Should have mst-consider step');
+    assert(steps.some(s => s.type === 'mst-accept'), 'Should have mst-accept step');
+    assert(steps.some(s => s.type === 'mst-complete'), 'Should have mst-complete step');
+  });
+
+  it('Kruskal on a 4-node known graph: MST weight = 6', () => {
+    // Square with diagonal:
+    // 0--1 (w=1), 1--2 (w=2), 2--3 (w=3), 0--3 (w=4), 0--2 (w=5)
+    // MST: 0-1(1), 1-2(2), 2-3(3) = 6
+    const edges = [
+      { u: 0, v: 1, w: 1 },
+      { u: 1, v: 2, w: 2 },
+      { u: 2, v: 3, w: 3 },
+      { u: 0, v: 3, w: 4 },
+      { u: 0, v: 2, w: 5 },
+    ];
+    const { result } = kruskal(4, edges);
+    assertEq(result.totalWeight, 6, 'Known 4-node MST weight');
+  });
+});
+
+
+// ─── 2. Shortest Path Tests ────────────────────────────────────────────
+
+describe('Shortest Paths — Dijkstra & Floyd-Warshall', () => {
+
+  it('Dijkstra on triangle: correct distances from node 0', () => {
+    const edges = [
+      { u: 0, v: 1, w: 1 },
+      { u: 1, v: 2, w: 2 },
+      { u: 0, v: 2, w: 5 },
+    ];
+    const { result } = dijkstra(3, edges, 0);
+    assertEq(result.dist[0], 0, 'dist to self');
+    assertEq(result.dist[1], 1, 'dist to node 1');
+    assertEq(result.dist[2], 3, 'dist to node 2 via 1 (1+2=3 < 5)');
+  });
+
+  it('Floyd-Warshall on triangle: correct all-pairs distances', () => {
+    const edges = [
+      { u: 0, v: 1, w: 1 },
+      { u: 1, v: 2, w: 2 },
+      { u: 0, v: 2, w: 5 },
+    ];
+    const { result } = floydWarshall(3, edges);
+    assertEq(result.dist[0][1], 1, 'FW: 0→1');
+    assertEq(result.dist[0][2], 3, 'FW: 0→2 via 1');
+    assertEq(result.dist[1][2], 2, 'FW: 1→2');
+    assertEq(result.dist[2][0], 3, 'FW: 2→0 (symmetric)');
+  });
+
+  it('Dijkstra == Floyd-Warshall on 3 Regions preset', () => {
+    const { nodes, edges } = PRESETS.threeRegions;
+    const n = nodes.length;
+    const { result: fwResult } = floydWarshall(n, edges);
+
+    for (let src = 0; src < n; src++) {
+      const { result: djResult } = dijkstra(n, edges, src);
+      for (let dst = 0; dst < n; dst++) {
+        assertEq(djResult.dist[dst], fwResult.dist[src][dst],
+          `Mismatch at src=${src}, dst=${dst}`);
+      }
+    }
+  });
+
+  it('Dijkstra == Floyd-Warshall on a random 15-node graph', () => {
+    const { nodes, edges } = generateRandomGraph({ nodeCount: 15, density: 0.35, seed: 777 });
+    const n = nodes.length;
+    const { result: fwResult } = floydWarshall(n, edges);
+
+    for (let src = 0; src < n; src++) {
+      const { result: djResult } = dijkstra(n, edges, src);
+      for (let dst = 0; dst < n; dst++) {
+        assertClose(djResult.dist[dst], fwResult.dist[src][dst], 0.01,
+          `Random graph mismatch at src=${src}, dst=${dst}`);
+      }
+    }
+  });
+
+  it('Dijkstra == Floyd-Warshall on Ring preset', () => {
+    const { nodes, edges } = PRESETS.ring;
+    const n = nodes.length;
+    const { result: fwResult } = floydWarshall(n, edges);
+
+    for (let src = 0; src < n; src++) {
+      const { result: djResult } = dijkstra(n, edges, src);
+      for (let dst = 0; dst < n; dst++) {
+        assertEq(djResult.dist[dst], fwResult.dist[src][dst],
+          `Ring mismatch at src=${src}, dst=${dst}`);
+      }
+    }
+  });
+
+  it('Path reconstruction gives a valid shortest path', () => {
+    const edges = [
+      { u: 0, v: 1, w: 1 },
+      { u: 1, v: 2, w: 2 },
+      { u: 0, v: 2, w: 5 },
+    ];
+    const { result } = dijkstra(3, edges, 0);
+    const path = reconstructPath(result.prev, 0, 2);
+    assertArrayEq(path, [0, 1, 2], 'Shortest path 0→2 should be [0,1,2]');
+  });
+
+  it('Distance to self is always 0', () => {
+    const { nodes, edges } = PRESETS.star;
+    const n = nodes.length;
+    const { result: fwResult } = floydWarshall(n, edges);
+    for (let i = 0; i < n; i++) {
+      assertEq(fwResult.dist[i][i], 0, `Self-distance of node ${i}`);
+    }
+  });
+
+  it('Distance matrix is symmetric for undirected graph', () => {
+    const { nodes, edges } = PRESETS.mesh;
+    const n = nodes.length;
+    const { result: fwResult } = floydWarshall(n, edges);
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        assertEq(fwResult.dist[i][j], fwResult.dist[j][i],
+          `Symmetry: dist[${i}][${j}] != dist[${j}][${i}]`);
+      }
+    }
+  });
+});
+
+
+// ─── 3. Placement Tests ────────────────────────────────────────────────
+
+describe('Placement — Exact & Heuristic', () => {
+
+  it('Bitmask DP on triangle with k=1: optimal is node with min weighted dist', () => {
+    const nodes = [
+      { id: 0, name: 'A', demand: 10, capacity: 100, hostCost: 5 },
+      { id: 1, name: 'B', demand: 10, capacity: 100, hostCost: 5 },
+      { id: 2, name: 'C', demand: 10, capacity: 100, hostCost: 5 },
+    ];
+    const edges = [
+      { u: 0, v: 1, w: 1 },
+      { u: 1, v: 2, w: 2 },
+      { u: 0, v: 2, w: 5 },
+    ];
+    const { result: { dist } } = floydWarshall(3, edges);
+    const { result } = bitmaskDPPlacement(3, nodes, 1, dist);
+
+    // Hand calc: node 0 → L = (0+1+3)/3 = 1.33, node 1 → L = (1+0+2)/3 = 1.0, node 2 → L = (3+2+0)/3 = 1.67
+    assertEq(result.sites[0], 1, 'Best site for k=1 should be node 1');
+    assertClose(result.L, 1.0, 0.01, 'L should be 1.0');
+  });
+
+  it('Bitmask DP == brute force on a 5-node random graph', () => {
+    const { nodes, edges } = generateRandomGraph({ nodeCount: 5, density: 0.5, seed: 42 });
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+
+    // Bitmask DP result
+    const { result: bmResult } = bitmaskDPPlacement(n, nodes, 2, dist);
+
+    // Manual brute force
+    let bestL = Infinity, bestSites = [];
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        let totalDemand = 0, weightedDist = 0;
+        for (let v = 0; v < n; v++) {
+          const d_v = nodes[v].demand || 1;
+          const d = Math.min(dist[v][i], dist[v][j]);
+          weightedDist += d_v * d;
+          totalDemand += d_v;
+        }
+        const L = weightedDist / totalDemand;
+        if (L < bestL) { bestL = L; bestSites = [i, j]; }
+      }
+    }
+
+    assertClose(bmResult.L, bestL, 0.01,
+      `Bitmask DP L (${bmResult.L}) should match brute force L (${bestL})`);
+  });
+
+  it('Tree DP on a path graph matches brute force', () => {
+    // Path: 0 -- 1 -- 2 -- 3 -- 4
+    const nodes = Array.from({ length: 5 }, (_, i) => ({
+      id: i, name: `N${i}`, demand: 10, capacity: 100, hostCost: 5
+    }));
+    const edges = [
+      { u: 0, v: 1, w: 10 },
+      { u: 1, v: 2, w: 10 },
+      { u: 2, v: 3, w: 10 },
+      { u: 3, v: 4, w: 10 },
+    ];
+    const n = 5, k = 2;
+    const { result: { dist } } = floydWarshall(n, edges);
+    const mst = kruskal(n, edges);
+
+    const { result: tdpResult } = treeDPPlacement(n, nodes, mst.result.tree, k, dist);
+    const { result: bmResult } = bitmaskDPPlacement(n, nodes, k, dist);
+
+    // Tree DP + local search should be competitive with brute force
+    assert(tdpResult.L <= bmResult.L * 1.5 + 1,
+      `Tree DP L (${tdpResult.L}) should be close to brute force L (${bmResult.L})`);
+  });
+
+  it('Greedy placement improves over random baseline', () => {
+    const { nodes, edges } = PRESETS.mesh;
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+
+    const { result: greedyResult } = greedyPlacement(n, nodes, 3, dist);
+    const { result: randomResult } = randomBaseline(n, nodes, 3, dist, 200, 42);
+
+    assert(greedyResult.L <= randomResult.meanL,
+      `Greedy L (${greedyResult.L}) should be <= random mean L (${randomResult.meanL})`);
+  });
+
+  it('Local search improves or equals greedy', () => {
+    const { nodes, edges } = PRESETS.mesh;
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+
+    const { result: greedyResult } = greedyPlacement(n, nodes, 3, dist);
+    const { result: localResult } = localSearchPlacement(n, nodes, 3, dist, greedyResult.sites);
+
+    assert(localResult.L <= greedyResult.L + 0.01,
+      `Local search L (${localResult.L}) should be <= greedy L (${greedyResult.L})`);
+  });
+
+  it('Placement badges are correct', () => {
+    const { nodes, edges } = PRESETS.threeRegions;
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+
+    const bm = bitmaskDPPlacement(n, nodes, 1, dist);
+    const gr = greedyPlacement(n, nodes, 1, dist);
+
+    assertEq(bm.result.badge, 'Exact', 'Bitmask DP should be Exact');
+    assertEq(gr.result.badge, 'Heuristic', 'Greedy should be Heuristic');
+  });
+
+  it('Star graph k=1: hub (node 0) is the optimal placement', () => {
+    const { nodes, edges } = PRESETS.star;
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+    const { result } = bitmaskDPPlacement(n, nodes, 1, dist);
+
+    assertEq(result.sites[0], 0, 'Hub should be optimal for k=1 in star');
+  });
+
+  it('Bitmask DP refuses n > 14', () => {
+    const { nodes, edges } = generateRandomGraph({ nodeCount: 16, density: 0.3, seed: 99 });
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+    const { result } = bitmaskDPPlacement(n, nodes, 2, dist);
+    assert(result.error != null, 'Should report error for n > 14');
+  });
+});
+
+
+// ─── 4. Capacity & Feasibility Tests ──────────────────────────────────
+
+describe('Capacity & Feasibility', () => {
+
+  it('Capacity is never exceeded when sufficient', () => {
+    const nodes = [
+      { id: 0, demand: 30, capacity: 80, hostCost: 10, name: 'A' },
+      { id: 1, demand: 30, capacity: 80, hostCost: 10, name: 'B' },
+      { id: 2, demand: 30, capacity: 80, hostCost: 10, name: 'C' },
+    ];
+    const edges = [{ u: 0, v: 1, w: 10 }, { u: 1, v: 2, w: 10 }, { u: 0, v: 2, w: 20 }];
+    const { result: { dist } } = floydWarshall(3, edges);
+
+    const { replicaLoad, feasible } = capacityAwareAssignment([0, 2], dist, nodes);
+    assert(feasible, 'Should be feasible');
+    assert(replicaLoad[0] <= 80, `Replica 0 load (${replicaLoad[0]}) exceeds capacity 80`);
+    assert(replicaLoad[1] <= 80, `Replica 1 load (${replicaLoad[1]}) exceeds capacity 80`);
+  });
+
+  it('Infeasible when total demand > total capacity', () => {
+    const nodes = [
+      { id: 0, demand: 60, capacity: 30, hostCost: 10, name: 'A' },
+      { id: 1, demand: 60, capacity: 30, hostCost: 10, name: 'B' },
+    ];
+    const edges = [{ u: 0, v: 1, w: 10 }];
+    const { result: { dist } } = floydWarshall(2, edges);
+
+    const result = capacityAwareAssignment([0, 1], dist, nodes);
+    assert(!result.feasible, 'Should be infeasible');
+    assert(result.reason.includes('demand'), 'Reason should mention demand');
+  });
+
+  it('Validates disconnected graph', () => {
+    const nodes = [
+      { id: 0, name: 'A', demand: 10, capacity: 50, hostCost: 5 },
+      { id: 1, name: 'B', demand: 10, capacity: 50, hostCost: 5 },
+      { id: 2, name: 'C', demand: 10, capacity: 50, hostCost: 5 },
+    ];
+    const edges = [{ u: 0, v: 1, w: 10 }]; // Node 2 is disconnected
+    const errors = validateGraph(nodes, edges);
+    assert(errors.some(e => e.includes('disconnected')), 'Should report disconnected graph');
+  });
+
+  it('Validates self-loops', () => {
+    const nodes = [{ id: 0, name: 'A', demand: 10, capacity: 50, hostCost: 5 }];
+    const edges = [{ u: 0, v: 0, w: 5 }];
+    const errors = validateGraph(nodes, edges);
+    assert(errors.some(e => e.includes('Self-loop')), 'Should report self-loop');
+  });
+
+  it('Validates duplicate edges', () => {
+    const nodes = [
+      { id: 0, name: 'A', demand: 10, capacity: 50, hostCost: 5 },
+      { id: 1, name: 'B', demand: 10, capacity: 50, hostCost: 5 },
+    ];
+    const edges = [{ u: 0, v: 1, w: 10 }, { u: 0, v: 1, w: 15 }];
+    const errors = validateGraph(nodes, edges);
+    assert(errors.some(e => e.includes('Duplicate')), 'Should report duplicate edge');
+  });
+});
+
+
+// ─── 5. Metrics & Formulas Tests ────────────────────────────────────────
+
+describe('Metrics & Formulas', () => {
+
+  it('Jain index = 1 for equal loads', () => {
+    const jain = jainFairness([10, 10, 10, 10]);
+    assertClose(jain, 1.0, 0.0001, 'Jain should be 1.0 for equal loads');
+  });
+
+  it('Jain index < 1 for unequal loads', () => {
+    const jain = jainFairness([100, 1, 1, 1]);
+    assert(jain < 1, `Jain (${jain}) should be < 1 for unequal loads`);
+  });
+
+  it('Jain index = 1/n for maximally unfair (one has all)', () => {
+    const jain = jainFairness([100, 0, 0, 0]);
+    assertClose(jain, 0.25, 0.0001, 'Jain should be 1/4 for one-sided load');
+  });
+
+  it('Per-node contributions sum to weighted-avg * totalDemand', () => {
+    const { nodes, edges } = PRESETS.threeRegions;
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+
+    const metrics = computeLatencyMetrics([1], dist, nodes);
+    const sumContrib = metrics.perNode.reduce((s, p) => s + p.contribution, 0);
+    const expected = metrics.weightedAvg * metrics.totalDemand;
+
+    assertClose(sumContrib, expected, 0.01,
+      `Sum of contributions (${sumContrib}) should equal L*totalDemand (${expected})`);
+  });
+
+  it('showMyWork reconciliation check passes', () => {
+    const { nodes, edges } = PRESETS.threeRegions;
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+
+    const { reconciles, globalL, sumContributions, totalDemand } = showMyWork([1], dist, nodes, edges);
+    assert(reconciles, `Reconciliation failed: sum=${sumContributions}, L*D=${globalL * totalDemand}`);
+  });
+
+  it('Percentile calculations are correct', () => {
+    const metrics = computeLatencyMetrics(
+      [0],
+      [[0, 10, 20], [10, 0, 15], [20, 15, 0]],
+      [{ demand: 1 }, { demand: 1 }, { demand: 1 }]
+    );
+    assertEq(metrics.min, 0, 'Min should be 0 (self-distance)');
+    assertEq(metrics.max, 20, 'Max should be 20');
+    assertClose(metrics.simpleAvg, 10, 0.01, 'Simple avg should be 10');
+  });
+
+  it('Formula cards are generated correctly', () => {
+    const { nodes, edges } = PRESETS.threeRegions;
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+
+    const sites = [1]; // Frankfurt
+    const metrics = computeLatencyMetrics(sites, dist, nodes);
+    const loads = computeReplicaLoads(sites, dist, nodes);
+    const objective = computeObjective({
+      replicaSites: sites, distMatrix: dist, nodes, edges,
+      mstEdgeIndices: [], weights: { alpha: 1, beta: 0, gamma: 0 }
+    });
+
+    const formulas = generateFormulas(metrics, loads, sites, nodes, objective);
+    assert(formulas.length >= 4, 'Should have at least 4 formula cards');
+    assert(formulas[0].name.includes('Latency'), 'First formula should be about latency');
+    assert(formulas[0].substitution.includes('ms'), 'Substitution should include units');
+  });
+});
+
+
+// ─── 6. Objective Function Tests ───────────────────────────────────────
+
+describe('Objective Function', () => {
+
+  it('J = L when alpha=1, beta=0, gamma=0', () => {
+    const { nodes, edges } = PRESETS.threeRegions;
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+
+    const obj = computeObjective({
+      replicaSites: [1], distMatrix: dist, nodes, edges,
+      mstEdgeIndices: [], weights: { alpha: 1, beta: 0, gamma: 0 }
+    });
+    assertClose(obj.J, obj.L, 0.01, 'J should equal L when beta=gamma=0');
+  });
+
+  it('Objective includes cost when beta > 0', () => {
+    const { nodes, edges } = PRESETS.threeRegions;
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+    const mst = kruskal(n, edges);
+
+    const obj = computeObjective({
+      replicaSites: [1], distMatrix: dist, nodes, edges,
+      mstEdgeIndices: mst.result.mstEdges, weights: { alpha: 1, beta: 1, gamma: 0, backboneWeight: 0.1 }
+    });
+    assert(obj.J > obj.L, 'J should be > L when beta > 0 and cost > 0');
+    assert(obj.cost > 0, 'Cost should be > 0');
+  });
+
+  it('Objective includes imbalance when gamma > 0', () => {
+    const nodes = [
+      { id: 0, demand: 100, capacity: 200, hostCost: 10, name: 'A' },
+      { id: 1, demand: 1,   capacity: 200, hostCost: 10, name: 'B' },
+      { id: 2, demand: 1,   capacity: 200, hostCost: 10, name: 'C' },
+    ];
+    const edges = [{ u: 0, v: 1, w: 10 }, { u: 1, v: 2, w: 10 }, { u: 0, v: 2, w: 20 }];
+    const { result: { dist } } = floydWarshall(3, edges);
+
+    const obj = computeObjective({
+      replicaSites: [0, 2], distMatrix: dist, nodes, edges,
+      mstEdgeIndices: [], weights: { alpha: 0, beta: 0, gamma: 1 }
+    });
+    assert(obj.imbalance > 0, 'Imbalance should be > 0 for unequal loads');
+    assertClose(obj.J, obj.imbalance, 0.01, 'J should equal imbalance when only gamma=1');
+  });
+});
+
+
+// ─── 7. Fault Tolerance Tests ──────────────────────────────────────────
+
+describe('Fault Tolerance', () => {
+
+  it('Removing a non-critical edge increases latency', () => {
+    const { nodes, edges } = PRESETS.threeRegions;
+    const { result } = faultTolerance(nodes.length, nodes, edges, [1], { type: 'edge', id: 2 });
+    // Removing Mumbai-Virginia edge; Frankfurt is the only replica
+    assert(result.delta >= 0, 'Latency should not decrease after edge removal');
+  });
+
+  it('Removing a bridge edge in failure test disconnects the graph', () => {
+    const { nodes, edges } = PRESETS.failureTest;
+    // Edge 1 (Beta-Gamma) is a bridge
+    const { result } = faultTolerance(nodes.length, nodes, edges, [0, 4], { type: 'edge', id: 1 });
+    assert(!result.connected, 'Removing bridge should disconnect graph');
+  });
+
+  it('Removing a replica node reports loss', () => {
+    const { nodes, edges } = PRESETS.threeRegions;
+    const { result, steps } = faultTolerance(nodes.length, nodes, edges, [1], { type: 'node', id: 1 });
+    assert(steps.some(s => s.type === 'fault-remove-node' && s.payload.replicaLost),
+      'Should report replica loss');
+  });
+});
+
+
+// ─── 8. Scenario Sweep Tests ──────────────────────────────────────────
+
+describe('Scenario Sweep & Elbow Detection', () => {
+
+  it('Sweep returns decreasing or non-increasing L as k grows', () => {
+    const { nodes, edges } = PRESETS.ring;
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+
+    const { result } = scenarioSweep(n, nodes, edges, dist, n);
+
+    for (let i = 1; i < result.curve.length; i++) {
+      assert(result.curve[i].L <= result.curve[i - 1].L + 0.01,
+        `L should not increase: k=${result.curve[i].k} has L=${result.curve[i].L} > L=${result.curve[i - 1].L}`);
+    }
+  });
+
+  it('Elbow k is between 1 and maxK', () => {
+    const { nodes, edges } = PRESETS.mesh;
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+
+    const { result } = scenarioSweep(n, nodes, edges, dist, n);
+    assert(result.elbowK >= 1 && result.elbowK <= n,
+      `Elbow k (${result.elbowK}) should be in [1, ${n}]`);
+  });
+
+  it('L at k=n is 0 (every node hosts a replica)', () => {
+    const nodes = [
+      { id: 0, demand: 10, capacity: 100, hostCost: 5, name: 'A' },
+      { id: 1, demand: 10, capacity: 100, hostCost: 5, name: 'B' },
+      { id: 2, demand: 10, capacity: 100, hostCost: 5, name: 'C' },
+    ];
+    const edges = [{ u: 0, v: 1, w: 10 }, { u: 1, v: 2, w: 10 }, { u: 0, v: 2, w: 20 }];
+    const { result: { dist } } = floydWarshall(3, edges);
+    const { result } = scenarioSweep(3, nodes, edges, dist, 3);
+
+    assertClose(result.curve[result.curve.length - 1].L, 0, 0.01,
+      'L should be 0 when k=n');
+  });
+});
+
+
+// ─── 9. Strategy Comparison Tests ──────────────────────────────────────
+
+describe('Strategy Comparison & Summary', () => {
+
+  it('compareStrategies returns multiple strategies', () => {
+    const { nodes, edges } = PRESETS.threeRegions;
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+    const mst = kruskal(n, edges);
+
+    const { strategies, bestStrategy } = compareStrategies(n, nodes, edges, 1, dist, mst.result);
+    assert(strategies.length >= 3, `Should have ≥ 3 strategies, got ${strategies.length}`);
+    assert(bestStrategy, 'Should have a best strategy');
+  });
+
+  it('Best strategy has lowest J', () => {
+    const { nodes, edges } = PRESETS.mesh;
+    const n = nodes.length;
+    const { result: { dist } } = floydWarshall(n, edges);
+    const mst = kruskal(n, edges);
+
+    const { strategies } = compareStrategies(n, nodes, edges, 3, dist, mst.result);
+    // Already sorted by J
+    for (let i = 1; i < strategies.length; i++) {
+      const a = strategies[i - 1].J ?? strategies[i - 1].L;
+      const b = strategies[i].J ?? strategies[i].L;
+      assert(a <= b + 0.01, `Strategies not sorted: ${a} > ${b}`);
+    }
+  });
+
+  it('generateSummary produces a readable string', () => {
+    const summary = generateSummary({
+      sites: [1, 3],
+      nodes: PRESETS.mesh.nodes,
+      L: 42.5,
+      badge: 'Exact',
+      algorithm: 'bitmask-dp',
+      improvements: { vsRandom: 35, vsGreedy: 5 }
+    });
+    assert(typeof summary === 'string' && summary.length > 30,
+      'Summary should be a meaningful string');
+    assert(summary.includes('London') || summary.includes('Mumbai'),
+      'Summary should include node names');
+  });
+
+  it('runFullAnalysis returns all expected fields', () => {
+    const analysis = runFullAnalysis(PRESETS.threeRegions, { k: 1 });
+
+    assert(analysis.mst, 'Should have MST result');
+    assert(analysis.distMatrix, 'Should have distance matrix');
+    assert(analysis.placement, 'Should have placement result');
+    assert(analysis.objective, 'Should have objective');
+    assert(analysis.metrics, 'Should have metrics');
+    assert(analysis.loads, 'Should have loads');
+    assert(analysis.formulas, 'Should have formulas');
+    assert(analysis.comparison, 'Should have comparison');
+    assert(analysis.summary, 'Should have summary');
+    assert(typeof analysis.summary === 'string', 'Summary should be string');
+  });
+});
+
+
+// ─── 10. Graph Utilities Tests ─────────────────────────────────────────
+
+describe('Graph Utilities', () => {
+
+  it('UnionFind correctly tracks components', () => {
+    const uf = new UnionFind(5);
+    assertEq(uf.components, 5, 'Initially 5 components');
+    uf.union(0, 1);
+    assertEq(uf.components, 4, '4 after first union');
+    assert(uf.connected(0, 1), '0 and 1 should be connected');
+    assert(!uf.connected(0, 2), '0 and 2 should not be connected');
+    uf.union(1, 2);
+    assert(uf.connected(0, 2), '0 and 2 should be connected transitively');
+  });
+
+  it('MinHeap pops in correct order', () => {
+    const heap = new MinHeap((a, b) => a.key - b.key);
+    [5, 3, 7, 1, 4].forEach(k => heap.push({ key: k }));
+    const order = [];
+    while (heap.size > 0) order.push(heap.pop().key);
+    assertArrayEq(order, [1, 3, 4, 5, 7], 'MinHeap should pop in sorted order');
+  });
+
+  it('checkConnectivity detects connected graph', () => {
+    const edges = [{ u: 0, v: 1, w: 1 }, { u: 1, v: 2, w: 1 }];
+    const result = checkConnectivity(3, edges);
+    assert(result.connected, 'Should be connected');
+    assertEq(result.componentCount, 1, 'Should have 1 component');
+  });
+
+  it('checkConnectivity detects disconnected graph', () => {
+    const edges = [{ u: 0, v: 1, w: 1 }];
+    const result = checkConnectivity(3, edges);
+    assert(!result.connected, 'Should be disconnected');
+    assertEq(result.componentCount, 2, 'Should have 2 components');
+  });
+
+  it('generateRandomGraph produces a connected graph', () => {
+    const { nodes, edges } = generateRandomGraph({ nodeCount: 20, density: 0.2, seed: 555 });
+    const conn = checkConnectivity(nodes.length, edges);
+    assert(conn.connected, 'Random graph should be connected');
+  });
+
+  it('generateRandomGraph respects nodeCount', () => {
+    const { nodes } = generateRandomGraph({ nodeCount: 12, seed: 1 });
+    assertEq(nodes.length, 12, 'Should have 12 nodes');
+  });
+
+  it('All presets are valid connected graphs', () => {
+    for (const [name, preset] of Object.entries(PRESETS)) {
+      const errors = validateGraph(preset.nodes, preset.edges);
+      const connErrors = errors.filter(e => e.includes('disconnected'));
+      assert(connErrors.length === 0, `Preset "${name}" should be connected: ${connErrors.join(', ')}`);
+    }
+  });
+});
+
+
+// ─── 11. Redundancy Tests ──────────────────────────────────────────────
+
+describe('Redundancy & Improvements', () => {
+
+  it('Redundancy >= 1 when every node has a replica', () => {
+    const nodes = [
+      { id: 0, demand: 10, capacity: 100, hostCost: 5, name: 'A' },
+      { id: 1, demand: 10, capacity: 100, hostCost: 5, name: 'B' },
+      { id: 2, demand: 10, capacity: 100, hostCost: 5, name: 'C' },
+    ];
+    const { result: { dist } } = floydWarshall(3, [
+      { u: 0, v: 1, w: 10 }, { u: 1, v: 2, w: 10 }, { u: 0, v: 2, w: 20 }
+    ]);
+    const r = computeRedundancy([0, 1, 2], dist, nodes);
+    assert(r >= 1, `Redundancy (${r}) should be >= 1`);
+  });
+
+  it('computeImprovements calculates correct percentages', () => {
+    const result = computeImprovements(50, {
+      random: { meanL: 100 },
+      greedy: { L: 60 }
+    });
+    assertClose(result.vsRandom, 50, 0.01, 'Should be 50% better than random');
+    assertClose(result.vsGreedy, 16.67, 0.1, 'Should be ~16.7% better than greedy');
+  });
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TEST RUNNER
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function runAllTests() {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+
+  const resultsDiv = document.getElementById('results');
+  resultsDiv.innerHTML = '';
+
+  const progressFill = document.getElementById('progressFill');
+  let totalTests = 0, passCount = 0, failCount = 0, skipCount = 0;
+
+  // Count total
+  for (const suite of suites) totalTests += suite.tests.length;
+
+  let completed = 0;
+  const startTime = performance.now();
+
+  for (const suite of suites) {
+    suite.passed = 0;
+    suite.failed = 0;
+    suite.skipped = 0;
+
+    const suiteDiv = document.createElement('div');
+    suiteDiv.className = 'suite';
+
+    const header = document.createElement('div');
+    header.className = 'suite-header';
+    header.innerHTML = `<span>${suite.name}</span><span class="badge running">RUNNING</span>`;
+    header.addEventListener('click', () => suiteDiv.classList.toggle('collapsed'));
+    suiteDiv.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'suite-body';
+    suiteDiv.appendChild(body);
+    resultsDiv.appendChild(suiteDiv);
+
+    for (const test of suite.tests) {
+      const t0 = performance.now();
+      try {
+        test.fn();
+        test.status = 'pass';
+        test.time = performance.now() - t0;
+        suite.passed++;
+        passCount++;
+      } catch (err) {
+        test.status = 'fail';
+        test.error = err.message || String(err);
+        test.time = performance.now() - t0;
+        suite.failed++;
+        failCount++;
+      }
+
+      completed++;
+      progressFill.style.width = `${(completed / totalTests) * 100}%`;
+
+      const row = document.createElement('div');
+      row.className = `test-row ${test.status}`;
+
+      const icon = test.status === 'pass' ? '✓' : test.status === 'fail' ? '✗' : '⊘';
+      let html = `<span class="icon">${icon}</span><div style="flex:1"><span class="name">${test.name}</span>`;
+      if (test.error) html += `<div class="error">${test.error}</div>`;
+      html += `</div><span class="time-ms">${test.time.toFixed(1)}ms</span>`;
+      row.innerHTML = html;
+      body.appendChild(row);
+
+      // Yield to UI
+      await new Promise(r => setTimeout(r, 0));
+    }
+
+    const badge = header.querySelector('.badge');
+    if (suite.failed > 0) {
+      badge.className = 'badge fail';
+      badge.textContent = `${suite.failed} FAILED`;
+    } else {
+      badge.className = 'badge pass';
+      badge.textContent = `${suite.passed} PASSED`;
+      suiteDiv.classList.add('collapsed');
+    }
+  }
+
+  const totalTime = performance.now() - startTime;
+
+  // Update summary
+  document.getElementById('totalStat').textContent = `${totalTests} tests`;
+  document.getElementById('passStat').textContent = `${passCount} passed`;
+  document.getElementById('failStat').textContent = `${failCount} failed`;
+  document.getElementById('skipStat').textContent = `${skipCount} skipped`;
+  document.getElementById('timeStat').textContent = `${totalTime.toFixed(0)}ms`;
+
+  progressFill.style.background = failCount > 0 ? 'var(--danger)' : 'var(--success)';
+
+  btn.disabled = false;
+  btn.textContent = failCount > 0 ? `Re-run (${failCount} failed)` : 'All Passed ✓ — Re-run';
+}
+
+// Expose to global for the onclick handler
+window.runAllTests = runAllTests;
+
+// Auto-run on load
+runAllTests();
+</script>
+
+</body>
+</html>

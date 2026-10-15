@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudPlace 3D — On The Network</title>
+  <meta name="description" content="How CloudPlace 3D thinks — algorithms explained with interactive visualisations.">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/sections.css">
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js" defer></script>
+  <style>
+    .coming-soon { min-height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: var(--space-4); padding-top: 100px; text-align: center; }
+    .coming-soon .phase-badge { display: inline-block; padding: 6px 16px; background: var(--olive-700); border-radius: var(--radius-pill); font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--lime-400); text-transform: uppercase; letter-spacing: var(--ls-wider); }
+    .coming-soon p { max-width: 480px; color: var(--text-muted-dark); line-height: var(--lh-body); }
+  </style>
+</head>
+<body data-theme="dark">
+  <section class="section section-dark contour-bg coming-soon grain">
+    <div class="container">
+      <span class="phase-badge">Phase 6 — Planned</span>
+      <div class="text-reveal-line">
+        <span class="reveal-text display" style="font-size: var(--fs-h1);">HOW IT</span>
+      </div>
+      <div class="text-reveal-line">
+        <span class="reveal-text display two-tone" style="font-size: var(--fs-h1);"><span class="serif-accent">THINKS</span></span>
+      </div>
+      <p data-animate="fade-up">
+        Every algorithm explained with plain-English intuition, complexity analysis, and live mini-visualisations
+        driven by the same step logs the Lab uses.
+      </p>
+      <a href="index.html" class="btn-pill" data-animate="fade-up" style="margin-top: var(--space-2);">
+        ← BACK TO HOME <span class="btn-arrow">→</span>
+      </a>
+    </div>
+  </section>
+  <script type="module">import './js/site.js'; import './js/motion.js';</script>
+</body>
+</html>
